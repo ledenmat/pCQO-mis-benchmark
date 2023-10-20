@@ -1,16 +1,17 @@
-import networkx as nx
 import torch
-import numpy as np
+import numpy
+import networkx as nx
+from custom_layers import ElementwiseMultiply
 
 
 def datalessNN_graph_params(
-    graph, seed=10, numpy_dtype=np.float32, torch_dtype=torch.float32
+    graph, seed=10, numpy_dtype=numpy.float32, torch_dtype=torch.float32
 ):
     ## Normalize graph labels to 0 - {Number of nodes} (this will help with indexing our graph-related weights)
     G = nx.relabel.convert_node_labels_to_integers(graph)
 
     ## Set numpy seed. This is used for theta initialization
-    np.random.seed(seed=seed)
+    numpy.random.seed(seed=seed)
 
     ## Graph order: number of nodes. Graph size: number of edges.
     graph_order = len((G.nodes))
@@ -30,16 +31,16 @@ def datalessNN_graph_params(
     for i in range(0, graph_order):
         list_of_node_degrees[i] = G.degree[i]
 
-    max_node_degree_in_graph = np.max(list_of_node_degrees)
+    max_node_degree_in_graph = numpy.max(list_of_node_degrees)
 
-    theta_vector = np.zeros(graph_order, dtype=numpy_dtype)
+    theta_vector = numpy.zeros(graph_order, dtype=numpy_dtype)
 
     for i in range(0, graph_order):
         ## To prevent exact repititive probability: add some very small epsilon
         theta_vector[i] = (
             1
             - (list_of_node_degrees[i] / max_node_degree_in_graph)
-            + np.random.uniform(low=0.0, high=0.1)
+            + numpy.random.uniform(low=0.0, high=0.1)
         )
 
     ###############################################
@@ -47,7 +48,7 @@ def datalessNN_graph_params(
     ###############################################
 
     #### This is the numpy array we need to update the weights of the second layer (N x (N+M+Mc))
-    second_layer_weights = np.zeros(
+    second_layer_weights = numpy.zeros(
         shape=(graph_order, graph_order + graph_size + graph_complement_size),
         dtype=numpy_dtype,
     )
@@ -69,7 +70,7 @@ def datalessNN_graph_params(
     del G_complement
 
     #### This is the numpy array we need to update the biases of the second layer (N+M+Mc)
-    second_layer_biases = np.zeros(
+    second_layer_biases = numpy.zeros(
         shape=(graph_order + graph_size + graph_complement_size), dtype=numpy_dtype
     )
 
@@ -86,7 +87,7 @@ def datalessNN_graph_params(
     ##############################################
 
     #### This is the numpy array we need to update the weights of the third layer (N+M+Mc)
-    third_layer_weights = np.zeros(
+    third_layer_weights = numpy.zeros(
         shape=(graph_order + graph_size + graph_complement_size), dtype=numpy_dtype
     )
 
@@ -106,3 +107,65 @@ def datalessNN_graph_params(
         "layer_2_biases": B_2,
         "layer_3_weights": W_3,
     }
+
+
+def datalessNN_module(theta_tensor, layer2_weights, layer2_biases, layer3_weights, torch_dtype=torch.float32):
+
+    graph_order = len(theta_tensor)
+    graph_nodes_and_all_possible_edges = len(layer2_biases)
+
+    ##################################################################3################################################
+    ################################3 initialize NN ##################################################################3
+    ##################################################################3################################################
+
+    NN = torch.nn.Sequential()
+
+    ###############################
+    ## Theta Layer initialization
+    ###############################
+    theta_layer = ElementwiseMultiply(in_features=graph_order, out_features=graph_order)
+
+    # Temporarily disable gradient calc to set initial weights
+    with torch.no_grad():
+        theta_layer.weight.data = theta_tensor
+
+    NN.append(theta_layer)
+
+    ################################
+    ## Second Layer initialization
+    ################################
+    layer2 = torch.nn.Linear(
+        in_features=graph_order,
+        out_features=graph_nodes_and_all_possible_edges,
+        bias=True,
+        dtype=torch_dtype
+    )
+    # add ReLu activation layer to layer 2
+    layer2_activation = torch.nn.ReLU()
+
+    # make layer non-trainable
+    layer2.requires_grad_(False)
+
+    # Initialize weights and biases
+    layer2.weight.data = numpy.transpose(layer2_weights)
+    layer2.bias.data = layer2_biases
+
+    NN.append(layer2)
+    NN.append(layer2_activation)
+
+    ###############################
+    ## Third Layer initialization
+    ###############################
+    layer3 = torch.nn.Linear(
+        in_features=graph_nodes_and_all_possible_edges, out_features=1, bias=False
+    )
+
+    # make layer non-trainable
+    layer3.requires_grad_(False)
+
+    # Initialize weights
+    layer3.weight.data = layer3_weights
+    
+    NN.append(layer3)
+
+    return NN
