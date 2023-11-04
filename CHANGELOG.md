@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2023-11-3
+
+### Added
+
+- New Solver abstraction. This allows the user to create new MIS solvers and benchmark them in a consistent manner.
+- New performance analysis notebook. Using the new solver abstraction, this notebook allows you to run a series of datasets across all solvers and plot their results.
+
 ## 2023-10-20
 
 ### Added
