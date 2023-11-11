@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2023-11-10
+
+### Added
+
+- ReduMIS solver and new project structure.
+- Subgraph analysis for the dNN w/subgraph method in the performance analysis notebook.
+
 ## 2023-11-3
 
 ### Added
