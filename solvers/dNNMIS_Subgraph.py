@@ -76,9 +76,10 @@ class DNNMIS_SUBGRAPH(Solver):
 
                 NN[0].apply(theta_constraint)
 
-                print(
-                    f"Training step: {i}, Output: {y_predicted.item():.4f}, Desired Output: {y_desired.item():.4f}"
-                )
+                if i % 500 == 0:
+                    print(
+                        f"Training step: {i}, Output: {y_predicted.item():.4f}, Desired Output: {y_desired.item():.4f}"
+                    )
 
                 output_prediction = y_predicted.item()
                 if fpi >= 5:

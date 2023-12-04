@@ -66,7 +66,7 @@ class ReduMIS(Solver):
             result.pop()
             self.solution["graph_mask"] = numpy.array(result, dtype=int)
             self.solution["size"] = numpy.count_nonzero(
-                self.solution["graph_mask"] == 1
+                self.solution["graph_mask"] == 1  
             )
 
         temp_result_os_path.unlink(missing_ok=True)
@@ -84,5 +84,7 @@ class ReduMIS(Solver):
         with open(output_file, "w") as f:
             f.write(f"{graph_order} {graph_size}\n")
 
-            for node, neighbors in sorted(G.adjacency()):
-                f.write(f"{' '.join(map(str, neighbors.keys()))}\n")
+            for _, neighbors in sorted(G.adjacency()):
+                sorted_neighbors = list(map(int, neighbors.keys()))
+                sorted_neighbors.sort()
+                f.write(f"{' '.join(list(map(str, sorted_neighbors)))}\n")

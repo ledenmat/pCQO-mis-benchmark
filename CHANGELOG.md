@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2023-12-4
+
+### Added
+
+- New graph test set under ./graphs/gnm_random_graphs.
+- New performance analysis notebook under ./notebooks.
+- Improved solver progress printing for dataless NN solvers.
+
 ## 2023-11-10
 
 ### Added

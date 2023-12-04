@@ -56,9 +56,9 @@ class DNNMIS_SAM(Solver):
 
         even_spacing = self.max_steps // 3
         training_stages = [
-            {"steps": even_spacing, "rho": 0.05},
-            {"steps": even_spacing, "rho": 0.25},
-            {"steps": even_spacing, "rho": 0.5},
+            {"steps": even_spacing, "rho": 0.1},
+            {"steps": even_spacing, "rho": 0.01},
+            {"steps": even_spacing, "rho": 0.001},
         ]
 
         for stage in training_stages:
@@ -81,9 +81,10 @@ class DNNMIS_SAM(Solver):
 
                 NN[0].apply(theta_constraint)
 
-                print(
-                    f"Training step: {i}, Output: {y_predicted.item():.4f}, Desired Output: {y_desired.item():.4f}"
-                )
+                if i % 500 == 0:
+                    print(
+                        f"Training step: {i}, Output: {y_predicted.item():.4f}, Desired Output: {y_desired.item():.4f}"
+                    )
 
                 output_prediction = y_predicted.item()
                 if fpi >= 5:
