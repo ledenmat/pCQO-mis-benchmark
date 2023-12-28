@@ -12,7 +12,7 @@ class ILPMIS(Solver):
     def __init__(self, G, params):
         super().__init__()
         self.G = G
-        _ = params
+        self.time_limit = params.get("time_limit", None)
         self.solution = {}
 
     def solve(self):
@@ -35,6 +35,10 @@ class ILPMIS(Solver):
         )
 
         problem = cplex.Cplex()
+
+        ### Optionally set time limit
+        if self.time_limit is not None:
+            problem.parameters.timelimit.set(float(self.time_limit))
 
         list_of_nodes = list(G.nodes)
 

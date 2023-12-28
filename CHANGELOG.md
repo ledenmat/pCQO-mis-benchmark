@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2023-12-28
+
+### Added
+
+- New "notebooks" directory to store analysis notebooks.
+- New GPU-compatible model for running the dataless NN.
+- New temperature scheduling solver "dNNMIS_GPU_TAU".
+
 ## 2023-12-4
 
 ### Added
