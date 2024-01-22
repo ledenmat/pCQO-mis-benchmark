@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2024-1-21
+
+### Added
+
+- New SATLIB and Erdos-Renyi graph analysis notebooks.
+- New standalone benchmarking script "benchmark.py".
+
 ## 2023-12-28
 
 ### Added

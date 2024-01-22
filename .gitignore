@@ -1,2 +1,9 @@
 .venv*
 __pycache__
+
+**/graphs/*
+**/SATLIB/*
+**/uf20_91/*
+**/output/*
+**/temp_kamis*
+**/results*

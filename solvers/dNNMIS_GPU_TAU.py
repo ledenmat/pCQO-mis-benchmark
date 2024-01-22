@@ -6,13 +6,14 @@ from itertools import combinations
 from lib.Solver import Solver
 from models.datalessnet import DatalessNet
 
+import networkx as nx
+from networkx import Graph
+
 # PARAMS:
 
 ## max_steps: How many steps would you like to use to train your model?
 ## selection_criteria: At what threshold should theta values be selected?
 ## learning_rate: At what learning rate should your optimizer start at?
-## convergence_epsilon: To what value epsilon do you want to check convergence to?
-
 # OUTPUTS:
 
 ## solution:
@@ -22,47 +23,52 @@ from models.datalessnet import DatalessNet
 ### number_of_steps: number of steps needed to find the solution
 
 
+class CustomActivation(torch.nn.Module):
+    def __init__(self):
+        super(CustomActivation, self).__init__()
+
+    def forward(self, x):
+        return x * torch.sigmoid(1000000 * x)
+
+
 class DNNMIS(Solver):
-    def __init__(self, G, params):
+    def __init__(self, G: Graph, params):
         super().__init__()
-        self.selection_criteria = params.get("selection_criteria", 0.8)
+        self.selection_criteria = params.get("selection_criteria", 0.5)
         self.learning_rate = params.get("learning_rate", 0.001)
         self.max_steps = params.get("max_steps", 10000)
-        self.convergence_std = params.get("convergence_std", 0.000000001)
         self.use_cpu = params.get("use_cpu", False)
-        
+        self.solve_interval = params.get("solve_interval", 100)
+        self.weight_decay = params.get("weight_decay", 0)
+
         self.graph = G
 
         self.temperature_schedule = torch.tensor(
-            (
-                [0] * 55
-                + [0.1] * 55
-                + [0.2] * 55
-                + [0.3] * 55
-                + [0.4] * 55
-                + [0.5] * 55
-            )
-            * 10000
+            params.get("temp_schedule", ([0] * 55 + [0.5] * 55) * self.max_steps)
         )
-
 
         self.graph_order = len(G.nodes)
 
         self.model = DatalessNet(G)
 
-        self.model.gamma = (self.graph_order * (self.graph_order -1 )) / (2 * self.model.graph_size)
-        self.model.gamma = 2
+        self.model.gamma = (self.graph_order * (self.graph_order - 1)) / (
+            2 * self.model.graph_size
+        )
+
         self.model.update_gamma()
 
-        self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=self.learning_rate
-        )
-        self.loss_fn = lambda predicted, desired: predicted - desired
+        self.model.activation = CustomActivation()
 
-        self.loss_fn = lambda predicted, _: predicted
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay,
+        )
+
+        self.loss_fn = lambda predicted: predicted
 
         self.x = torch.ones(self.graph_order)
-        self.objective = torch.tensor(-(self.graph_order**2) / 2)
+
         self.solution = {}
 
     def solve(self):
@@ -73,13 +79,14 @@ class DNNMIS(Solver):
 
         self.model = self.model.to(device)
         self.x = self.x.to(device)
-        self.objective = self.objective.to(device)
         self.temperature_schedule = self.temperature_schedule.to(device)
-
-        self._start_timer()
 
         MIS_mask = []
         MIS_size = 0
+
+        if device == "cuda:0":
+            torch.cuda.synchronize()
+        self._start_timer()
 
         for i in range(self.max_steps):
             self.optimizer.zero_grad()
@@ -88,34 +95,49 @@ class DNNMIS(Solver):
 
             predicted: Tensor = self.model(self.x)
 
-            output = self.loss_fn(predicted, self.objective)
+            output = self.loss_fn(predicted)
 
             output.backward()
             self.optimizer.step()
 
-            if i % 50 == 0:
-                with torch.no_grad():
-                    graph_probs = self.model.theta_layer.weight.data.tolist()
+            with torch.no_grad():
+                graph_probs = self.model.theta_layer.weight.data.tolist()
 
-                print(graph_probs)
+            graph_mask = [0 if x < self.selection_criteria else 1 for x in graph_probs]
 
-                graph_mask = [
-                    0 if x < self.selection_criteria else 1 for x in graph_probs
-                ]
+            indices = [i for i, x in enumerate(graph_mask) if x == 1]
 
-                indices = [i for i, x in enumerate(graph_mask) if x == 1]
+            if i % self.solve_interval == 0 and len(indices) > MIS_size + 1:
+                subgraph = self.graph.subgraph(indices)
+                subgraph = nx.Graph(subgraph)
+                while len(subgraph) > 0:
+                    degrees = dict(subgraph.degree())
+                    max_degree_nodes = [
+                        node
+                        for node, degree in degrees.items()
+                        if degree == max(degrees.values())
+                    ]
 
-                IS_size = sum(graph_mask) if MIS_checker(indices, self.graph) is True else 0
+                    if (
+                        len(max_degree_nodes) == 0
+                        or subgraph.degree(max_degree_nodes[0]) == 0
+                    ):
+                        break  # No more nodes to remove or all remaining nodes have degree 0
 
+                    subgraph.remove_node(max_degree_nodes[0])
+                IS_size = len(subgraph)
                 if IS_size > MIS_size:
+                    if device == "cuda:0":
+                        torch.cuda.synchronize()
+                    self._stop_timer()
                     MIS_size = IS_size
                     MIS_mask = graph_mask
+                    print(f"Found MIS of size: {MIS_size}")
 
+            if i % 5000 == 0:
                 print(
-                    f"Training step: {i}, MIS size: {MIS_size}, Output: {predicted.item():.4f}, Desired Output: {self.objective.item():.4f}"
+                    f"Training step: {i}, MIS size: {MIS_size}, Output: {predicted.item():.4f}"
                 )
-
-        self._stop_timer()
 
         self.solution[
             "graph_probabilities"
@@ -124,14 +146,3 @@ class DNNMIS(Solver):
         self.solution["graph_mask"] = MIS_mask
         self.solution["size"] = MIS_size
         self.solution["number_of_steps"] = i
-
-
-def MIS_checker(MIS_list, G):
-    pairs = list(combinations(MIS_list, 2))
-    IS_CHECKER = True
-    if len(MIS_list) > 1:
-        for pair in pairs:
-            if (pair[0], pair[1]) in G.edges or (pair[1], pair[0]) in G.edges:
-                IS_CHECKER = False
-                break
-    return IS_CHECKER
