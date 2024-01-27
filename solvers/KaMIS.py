@@ -55,7 +55,7 @@ class ReduMIS(Solver):
         if self.seed is not None:
             redumis_command.append(f"--seed={self.seed}")
 
-        subprocess.check_output(redumis_command)
+        subprocess.Popen(redumis_command, stdout=subprocess.PIPE, stderr=subprocess. STDOUT, shell=True)
 
         self._stop_timer()
 
