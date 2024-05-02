@@ -10,27 +10,21 @@ from lib.Solver import Solver
 import networkx as nx
 from networkx import Graph
 
-def loss_function(adjacency_matrix_tensor,adjacency_matrix_tensor_comp, Matrix_X, gamma, beta):
-    ## without edges of the comp graph:
-    # loss = -Matrix_X.sum() + (gamma/2) * (Matrix_X.T @ (adjacency_matrix_tensor) @ Matrix_X)
+import numpy as np
 
-    ## with edges of the comp graph:
-    loss = -Matrix_X.sum() + (gamma/2) * (Matrix_X.T @ (adjacency_matrix_tensor) @ Matrix_X) - (beta/2) * (Matrix_X.T @ (adjacency_matrix_tensor_comp) @ Matrix_X)
-    return loss
+from mosek.fusion import Model, Domain, ObjectiveSense, Expr
 
-def batched_loss_function(adjacency_matrix_tensor, adjacency_matrix_tensor_comp, Matrix_X_batch, gamma, beta):
+def batched_loss_function(adjacency_matrix_tensor, adjacency_matrix_tensor_comp, Matrix_X_batch, s_SDP_v_tensor, W_SDP_uv_tensor, gamma, beta):
 
     # Matrix_X_batch is now assumed to be of shape [batch_size, num_nodes, 1]
 
     # Compute the loss for the batch
 
-    term1 = -Matrix_X_batch.sum(dim=1)  # Sum over nodes, keep batch dimension
+    term1 = -torch.matmul(Matrix_X_batch, s_SDP_v_tensor)
 
-    print(Matrix_X_batch[0,:,0])
+    term2 = (gamma / 2) * torch.bmm(torch.bmm(Matrix_X_batch, adjacency_matrix_tensor), Matrix_X_batch.transpose(1, 2)).squeeze(1) 
 
-    term2 = (gamma / 2) * torch.bmm(torch.bmm(Matrix_X_batch.transpose(1, 2), adjacency_matrix_tensor), Matrix_X_batch).squeeze(1) 
-
-    term3 = (beta / 2) * torch.bmm(torch.bmm(Matrix_X_batch.transpose(1, 2), adjacency_matrix_tensor_comp), Matrix_X_batch).squeeze(1) 
+    term3 = (beta / 2) * torch.bmm(torch.bmm(Matrix_X_batch, adjacency_matrix_tensor_comp*W_SDP_uv_tensor), Matrix_X_batch.transpose(1,2)).squeeze((1)) 
 
     # Calculate total loss for each element in the batch and then mean
 
@@ -54,7 +48,63 @@ def normalize_adjacency_matrix(graph):
     
     return normalized_adjacency
 
-class Quadratic(Solver):
+def solve_SDP(graph):
+    n = len(graph)
+    matrix_of_ones = np.ones((n,n))
+
+    with Model("SDP_init") as m:
+        X = m.variable('X', [n, n], Domain.inPSDCone())
+        objective_expr = Expr.dot(matrix_of_ones, X)
+        m.objective('obj', ObjectiveSense.Maximize, objective_expr)
+        m.constraint('tr', Expr.sum(X.diag()), Domain.equalsTo(1.0))
+        for edge in graph.edges:
+            i, j = edge
+            m.constraint(f'con_{i}_{j}', X.index(i, j), Domain.equalsTo(0.0))
+            m.constraint(f'con_{j}_{i}', X.index(j, i), Domain.equalsTo(0.0))
+
+        m.solve()
+        X_solution = X.level()
+        X_solution = np.array(X_solution)
+        X_solution = X_solution.reshape(n,n)
+
+    X_SDP_solution = X_solution
+
+    ## Coding W_SDP_uv:
+    W_SDP_uv = torch.zeros(n,n)
+
+    # create a dictionary of key = edge (u,v) in G' and value is equation to X(u,v)
+    G_hat_edges_strength_dict = {}
+
+    for v in range(n):
+        for u in range(n):
+            if (v,u) not in graph.edges() and u != v:
+                G_hat_edges_strength_dict[(v,u)] =  X_SDP_solution[v,u]
+
+    # Normalize
+    values_array = np.array(list(G_hat_edges_strength_dict.values()))
+    normalized_values_MINMAX = (values_array - np.min(values_array)) / (np.max(values_array) - np.min(values_array))
+    G_hat_edges_strength_dict_normalized_MINMAX = {key: normalized_values_MINMAX[i] for i, key in enumerate(G_hat_edges_strength_dict)} ######## USE THIS
+
+    # Assign to W_SDP_uv
+    for v in range(n):
+        for u in range(n):
+            if (v,u) not in graph.edges() and v != u:
+                W_SDP_uv[v,u] = G_hat_edges_strength_dict_normalized_MINMAX[(v,u)]
+
+    ## Coding s_SDP_v and X_SDP_init:
+
+    sol_diag = np.diag(X_SDP_solution)
+    s_SDP_v = sol_diag / np.max(sol_diag)
+    X_SDP_init = (sol_diag - np.min(sol_diag)) / (np.max(sol_diag) - np.min(sol_diag))
+
+    ### Converting to torch tensors: Convert s_SDP_v and W_SDP_uv to torch tensors
+    s_SDP_v_tensor = torch.tensor(s_SDP_v, dtype=torch.float32)
+    X_SDP_init_tensor = torch.tensor(X_SDP_init, dtype=torch.float32)
+    W_SDP_uv_tensor = torch.tensor(W_SDP_uv, dtype=torch.float32)
+
+    return [s_SDP_v_tensor, X_SDP_init_tensor, W_SDP_uv_tensor]
+
+class Quadratic_SDP(Solver):
     def __init__(self, G: Graph, params):
         super().__init__()
         self.learning_rate = params.get("learning_rate", 0.001)
@@ -62,7 +112,7 @@ class Quadratic(Solver):
 
         self.graph = G
 
-        self.beta = params.get("beta", 1)
+        self.beta = 1
 
         self.gamma = params.get("gamma", 625)
 
@@ -86,8 +136,6 @@ class Quadratic(Solver):
 
         self.improve_split = params.get("improve_split", 25)
 
-        self.value_initializer = params.get("value_initializer", torch.nn.init.uniform_)
-
     def solve(self):
         # Obtain A_G and A_G hat (and/or N_G and N_G hat)
 
@@ -110,7 +158,11 @@ class Quadratic(Solver):
         
         adjacency_matrix_dense = adjacency_matrix_dense.repeat(adj_matrix_batch_size, 1, 1)
         adjacency_matrix_comp_dense = adjacency_matrix_comp_dense.repeat(adj_matrix_batch_size, 1, 1)
-            
+        
+        [s_SDP_v_tensor, X_SDP_init_tensor, W_SDP_uv_tensor] = solve_SDP(self.graph)
+
+        mean_vector = X_SDP_init_tensor
+        covariance_matrix = 1*torch.eye(len(mean_vector))
 
         # Optimization loop:
         # Initialization:
@@ -121,13 +173,17 @@ class Quadratic(Solver):
         )
         print("using device: ", device)
 
-        Matrix_X = torch.ones((self.graph_order,1))
+        Matrix_X = X_SDP_init_tensor
 
         Matrix_X = Matrix_X.unsqueeze(0).repeat(self.batch_size, 1, 1)
         
         Matrix_X = Matrix_X.to(device)
 
         Matrix_X = Matrix_X.requires_grad_(True)
+        
+        s_SDP_v_tensor = s_SDP_v_tensor.to(device)
+
+        W_SDP_uv_tensor = W_SDP_uv_tensor.to(device)
 
         gamma = torch.tensor(self.gamma, device=device)
 
@@ -142,7 +198,6 @@ class Quadratic(Solver):
 
         # Define Optimizer over matrix X
         optimizer = optim.Adam([Matrix_X], lr=learning_rate_alpha)
-        lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=self.lr_gamma)
 
         best_MIS = 0
         MIS = []
@@ -151,8 +206,7 @@ class Quadratic(Solver):
 
         steps_to_best_MIS = 0
 
-        explore_iteration = 0
-        improve_iteration = 0
+        MIS_found = False
 
         if device == "cuda:0":
             torch.cuda.synchronize()
@@ -162,7 +216,7 @@ class Quadratic(Solver):
             if test_runtime:
                 start_time = time.time()
 
-            loss = batched_loss_function(adjacency_matrix_tensor,adjacency_matrix_tensor_comp, Matrix_X, gamma = gamma, beta = beta)
+            loss = batched_loss_function(adjacency_matrix_tensor,adjacency_matrix_tensor_comp, Matrix_X, s_SDP_v_tensor, W_SDP_uv_tensor, gamma = gamma, beta = beta)
 
             if test_runtime:
                 torch.cuda.synchronize()
@@ -204,43 +258,41 @@ class Quadratic(Solver):
             # Iteration logger every XX iterations:
             if (iteration_t + 1) % 1000 == 0:
                 print(f"Step {iteration_t + 1}/{number_of_iterations_T}, IS: {MIS}, lr: {learning_rate_alpha}, MIS Size: {best_MIS}")
-            
-            if explore_iteration == self.explore_split:
-                lr_scheduler.step()
-                improve_iteration = 0
-            
-            if improve_iteration == self.improve_split:
-                explore_iteration = 0
+        
+            masks = Matrix_X.data[:,0,:] > self.threshold
 
-                masks = Matrix_X.data[:,:,0] > self.threshold
+            print(loss)
 
-                for batch_id, mask in enumerate(masks):
-                    indices = mask.nonzero(as_tuple=True)[0].tolist()
-                    subgraph = self.graph.subgraph(indices)
-                    local_IS = indices
+            for batch_id, mask in enumerate(masks):
+                indices = mask.nonzero(as_tuple=True)[0].tolist()
+                subgraph = self.graph.subgraph(indices)
+                local_IS = indices
 
-                    # If no MIS, move one
-                    # if MIS_checker(MIS, G)[0] is False: MIS = []
-                    if any(subgraph.edges()): local_IS = []
+                # If no MIS, move one
+                if any(subgraph.edges()): local_IS = []
 
-                    batched_IS[batch_id] = local_IS
+                if len(local_IS) > 0:
+                    MIS_found = True
+
+                batched_IS[batch_id] = local_IS
                 
-                if test_runtime:
-                    torch.cuda.synchronize()
-                    MIS_generation_time = time.time()
-                    print("time to perform MIS selection:", MIS_generation_time - box_constraint_time)
+            if test_runtime:
+                torch.cuda.synchronize()
+                MIS_generation_time = time.time()
+                print("time to perform MIS selection:", MIS_generation_time - box_constraint_time)
 
-                replace_batch = []
+            replace_batch = []
 
-                for batch_id, IS in enumerate(batched_IS):
-                    IS_length = len(IS)
-                    if IS_length > best_MIS:
-                        steps_to_best_MIS = iteration_t
-                        best_MIS = IS_length
-                        MIS = IS
-                    
-                    if IS_length > 0:
-                        replace_batch.append(batch_id)
+            for batch_id, IS in enumerate(batched_IS):
+                IS_length = len(IS)
+                if IS_length > best_MIS:
+                    steps_to_best_MIS = iteration_t
+                    best_MIS = IS_length
+                    MIS = IS
+                    MIS_found = True
+                
+                if IS_length > 0:
+                    replace_batch.append(batch_id)
 
 
                 if test_runtime:
@@ -248,15 +300,14 @@ class Quadratic(Solver):
                     MIS_check_time = time.time()
                     print("time to perform MIS checking:", MIS_check_time - MIS_generation_time)
 
-                # # Restart X and the optimizer to search at a different point in [0,1]^n
+            if MIS_found:
+                MIS_found = False
                 with torch.no_grad():
                     for batch in replace_batch:
-                        Matrix_X.data[batch, :, :] = self.value_initializer(torch.empty((self.graph_order, 1)))
+                        Matrix_X.data[batch, :, :] = torch.normal(mean=mean_vector, std=torch.sqrt(torch.diag(covariance_matrix)))
+                        Matrix_X.data[Matrix_X>=1] =1
+                        Matrix_X.data[Matrix_X<=0] =0
                 optimizer = optim.Adam([Matrix_X], lr=learning_rate_alpha)
-                lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=self.lr_gamma)
-            
-            improve_iteration += 1
-            explore_iteration += 1
 
         if device == "cuda:0":
             torch.cuda.synchronize()

@@ -1,7 +1,7 @@
 import torch
 import numpy
 from lib.Solver import Solver
-from external.sam import SAM
+from archive.sam import SAM
 from lib.datalessNN import datalessNN_graph_params, datalessNN_module
 from lib.layer_constraints import ZeroOneClamp
 

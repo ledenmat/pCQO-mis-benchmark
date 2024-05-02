@@ -34,9 +34,9 @@ class CustomActivation(torch.nn.Module):
 class DNNMIS(Solver):
     def __init__(self, G: Graph, params):
         super().__init__()
-        self.selection_criteria = params.get("selection_criteria", 0.5)
+        self.selection_criteria = params.get("selection_criteria", 0.45)
         self.learning_rate = params.get("learning_rate", 0.001)
-        self.max_steps = params.get("max_steps", 10000)
+        self.max_steps = params.get("number_of_steps", 10000)
         self.use_cpu = params.get("use_cpu", False)
         self.solve_interval = params.get("solve_interval", 100)
         self.weight_decay = params.get("weight_decay", 0)
@@ -54,6 +54,8 @@ class DNNMIS(Solver):
         self.model.gamma = (self.graph_order * (self.graph_order - 1)) / (
             2 * self.model.graph_size
         )
+        
+        self.model.gamma = 1
 
         self.model.update_gamma()
 
@@ -72,6 +74,8 @@ class DNNMIS(Solver):
         self.solution = {}
 
     def solve(self):
+        self._start_timer()
+
         device = torch.device(
             "cuda:0" if torch.cuda.is_available() and not self.use_cpu else "cpu"
         )
@@ -84,9 +88,6 @@ class DNNMIS(Solver):
         MIS_mask = []
         MIS_size = 0
 
-        if device == "cuda:0":
-            torch.cuda.synchronize()
-        self._start_timer()
 
         for i in range(self.max_steps):
             self.optimizer.zero_grad()
@@ -127,9 +128,6 @@ class DNNMIS(Solver):
                     subgraph.remove_node(max_degree_nodes[0])
                 IS_size = len(subgraph)
                 if IS_size > MIS_size:
-                    if device == "cuda:0":
-                        torch.cuda.synchronize()
-                    self._stop_timer()
                     MIS_size = IS_size
                     MIS_mask = graph_mask
                     print(f"Found MIS of size: {MIS_size}")
@@ -138,6 +136,10 @@ class DNNMIS(Solver):
                 print(
                     f"Training step: {i}, MIS size: {MIS_size}, Output: {predicted.item():.4f}"
                 )
+
+        if device == "cuda:0":
+            torch.cuda.synchronize()
+        self._stop_timer()
 
         self.solution[
             "graph_probabilities"

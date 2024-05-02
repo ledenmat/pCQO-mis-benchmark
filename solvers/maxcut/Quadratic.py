@@ -62,7 +62,7 @@ class Quadratic(Solver):
 
         self.graph = G
 
-        self.beta = params.get("beta", 1)
+        self.beta = 1
 
         self.gamma = params.get("gamma", 625)
 

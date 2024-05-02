@@ -22,16 +22,16 @@ class ConstrainedElemMultiply(nn.Module):
 def generate_theta_weight(graph: MultiGraph, graph_order: int) -> nn.Parameter:
     theta_weight = torch.zeros(graph_order)
 
-    # node_degrees = torch.tensor([val for (_, val) in graph.degree()])
+    node_degrees = torch.tensor([val for (_, val) in graph.degree()])
 
-    # max_degree = node_degrees.max()
+    max_degree = node_degrees.max()
 
-    # for i in range(graph_order):
-    #     theta_weight[i] = 1 - node_degrees[i] / max_degree + torch.randint(0, 1, size=(1,)) /10
+    for i in range(graph_order):
+        theta_weight[i] = 1- node_degrees[i] / max_degree + torch.randint(0, 1, size=(1,)) /10
 
-    torch.manual_seed(7)
+    # torch.manual_seed(7)
 
-    theta_weight = torch.rand((graph_order))
+    # theta_weight = torch.rand((graph_order))
 
     return nn.Parameter(theta_weight)
 
@@ -56,7 +56,7 @@ def generate_second_layer_weight(
         second_layer_weight[pair[1], graph_order + graph_size + i] = 1.0
     del complement_graph
 
-    return nn.Parameter(second_layer_weight.t())
+    return nn.Parameter(second_layer_weight.t().to_dense())
 
 
 def generate_second_layer_biases(
@@ -79,7 +79,7 @@ def generate_third_layer_weight(
     third_layer_weight[graph_order : graph_order + graph_size] = graph_order
     third_layer_weight[graph_order + graph_size :] = -1.0
 
-    return nn.Parameter(third_layer_weight)
+    return nn.Parameter(third_layer_weight.to_dense())
 
 
 class DatalessNet(nn.Module):
