@@ -42,7 +42,7 @@ def save_gpickle(file_path, python_object):
 
 
 def generate_SDP_solutions(dataset, output_directory, save_interval):
-    solutions = []
+    solutions = {}
 
     stage = 0
     stages = len(dataset)
@@ -59,7 +59,7 @@ def generate_SDP_solutions(dataset, output_directory, save_interval):
         print(
             f"Graph Name: {solution['graph_name']}, SDP Solve Time Taken: {solution['time_taken']}"
         )
-        solutions.append(solution)
+        solutions[graph["name"]] = solution
         stage += 1
         print(f"Completed {stage} / {stages}")
 

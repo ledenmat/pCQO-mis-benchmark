@@ -4,7 +4,11 @@ import networkx as nx
 import pickle
 import pandas
 
-from solvers.Quadratic_SDP import Quadratic_SDP
+import torch
+
+from lib.dataset_generation import assemble_dataset_from_gpickle
+
+from solvers.Quadratic_Batch import Quadratic_Batch
 # from solvers.Quadratic import Quadratic
 # from solvers.KaMIS import ReduMIS
 
@@ -12,31 +16,17 @@ from solvers.Quadratic_SDP import Quadratic_SDP
 #### GRAPH IMPORT ####
 
 graph_directories = [
-    "./graphs/satlib"
+    "./graphs/satlib/m403",
+    "./graphs/satlib/m411",
+    "./graphs/satlib/m418",
+    "./graphs/satlib/m423",
+    "./graphs/satlib/m429",
+    "./graphs/satlib/m435",
+    "./graphs/satlib/m441",
+    "./graphs/satlib/m449"
 ]
 
-datasets = []
-
-for graph_directory in graph_directories:
-    for filename in os.listdir(graph_directory):
-        if filename.endswith(".gpickle"):
-            print(
-                "Graph ",
-                os.path.join(graph_directory, filename),
-                "is being imported ...",
-            )
-            with open(os.path.join(graph_directory, filename), "rb") as f:
-                G = pickle.load(f)
-                datasets.append(
-                    {
-                        "name": filename[:-8],
-                        "graph": nx.relabel.convert_node_labels_to_integers(
-                            G, first_label=0
-                        ),
-                    }
-                )
-
-datasets = sorted(datasets, key=lambda x: len(x["name"]))
+dataset = assemble_dataset_from_gpickle(graph_directories)
 
 ### for SATLIB bad instance testing:
 # temp = []
@@ -58,17 +48,149 @@ solvers = [
     #     }
     # }
     {
-        "name": "G775LR0.5S5000",
-        "class": Quadratic_SDP,
+        "name": "Quadratic SDP Batch Test 1",
+        "class": Quadratic_Batch,
         "params": {
-            "learning_rate": 0.5,
-            "number_of_steps": 5000,
+            "learning_rate": 0.9,
+            "number_of_steps": 537600,
             "gamma": 775,
             "batch_size": 1,
-            "lr_gamma": 0.1,
+            "std": 1.75,
             "threshold": 0.0,
         },
     },
+    {
+        "name": "Quadratic SDP Batch Test 16",
+        "class": Quadratic_Batch,
+        "params": {
+            "learning_rate": 0.9,
+            "number_of_steps": 33600,
+            "gamma": 775,
+            "batch_size": 16,
+            "std": 1.75,
+            "threshold": 0.0,
+        },
+    },
+        {
+        "name": "Quadratic SDP Batch Test 32",
+        "class": Quadratic_Batch,
+        "params": {
+            "learning_rate": 0.9,
+            "number_of_steps": 16800,
+            "gamma": 775,
+            "batch_size": 32,
+            "std": 1.75,
+            "threshold": 0.0,
+        },
+    },
+            {
+        "name": "Quadratic SDP Batch Test 64",
+        "class": Quadratic_Batch,
+        "params": {
+            "learning_rate": 0.9,
+            "number_of_steps": 8400,
+            "gamma": 775,
+            "batch_size": 64,
+            "std": 1.75,
+            "threshold": 0.0,
+        },
+    },
+                {
+        "name": "Quadratic SDP Batch Test 128",
+        "class": Quadratic_Batch,
+        "params": {
+            "learning_rate": 0.9,
+            "number_of_steps": 4200,
+            "gamma": 775,
+            "batch_size": 128,
+            "std": 1.75,
+            "threshold": 0.0,
+        },
+    },
+                    {
+        "name": "Quadratic SDP Batch Test 256",
+        "class": Quadratic_Batch,
+        "params": {
+            "learning_rate": 0.9,
+            "number_of_steps": 2100,
+            "gamma": 775,
+            "batch_size": 256,
+            "std": 1.75,
+            "threshold": 0.0,
+        },
+    },
+    #     {
+    #     "name": "Quadratic SDP Variance Test 0.5",
+    #     "class": Quadratic_Batch,
+    #     "params": {
+    #         "learning_rate": 0.9,
+    #         "number_of_steps": 3000,
+    #         "gamma": 775,
+    #         "batch_size": 128,
+    #         "std": 0.5,
+    #         "threshold": 0.0,
+    #     },
+    # },
+    #         {
+    #     "name": "Quadratic SDP Variance Test 0.75",
+    #     "class": Quadratic_Batch,
+    #     "params": {
+    #         "learning_rate": 0.9,
+    #         "number_of_steps": 3000,
+    #         "gamma": 775,
+    #         "batch_size": 128,
+    #         "std": 0.75,
+    #         "threshold": 0.0,
+    #     },
+    # },
+    #             {
+    #     "name": "Quadratic SDP Variance Test 1",
+    #     "class": Quadratic_Batch,
+    #     "params": {
+    #         "learning_rate": 0.9,
+    #         "number_of_steps": 3000,
+    #         "gamma": 775,
+    #         "batch_size": 128,
+    #         "std": 1,
+    #         "threshold": 0.0,
+    #     },
+    # },
+    #                 {
+    #     "name": "Quadratic SDP Variance Test 1.5",
+    #     "class": Quadratic_Batch,
+    #     "params": {
+    #         "learning_rate": 0.9,
+    #         "number_of_steps": 3000,
+    #         "gamma": 775,
+    #         "batch_size": 128,
+    #         "std": 1.5,
+    #         "threshold": 0.0,
+    #     },
+    # },
+    #                     {
+    #     "name": "Quadratic SDP Variance Test 2",
+    #     "class": Quadratic_Batch,
+    #     "params": {
+    #         "learning_rate": 0.9,
+    #         "number_of_steps": 3000,
+    #         "gamma": 775,
+    #         "batch_size": 128,
+    #         "std": 2,
+    #         "threshold": 0.0,
+    #     },
+    # },
+    #                         {
+    #     "name": "Quadratic SDP Variance Test 5",
+    #     "class": Quadratic_Batch,
+    #     "params": {
+    #         "learning_rate": 0.9,
+    #         "number_of_steps": 3000,
+    #         "gamma": 775,
+    #         "batch_size": 128,
+    #         "std": 5,
+    #         "threshold": 0.0,
+    #     },
+    # },
     # {
     #     "name": "Quadratic with SDP",
     #     "class": Quadratic,
@@ -370,29 +492,34 @@ def table_output(solutions, datasets, current_stage, total_stages):
 solutions = []
 
 stage = 0
-stages = len(solvers) * len(datasets)
+stages = len(solvers) * len(dataset)
 
-for dataset in datasets:
+initializations = pickle.load(open("./solutions/SDP/SDP_Generation_SATLIB", "rb"))
+
+for graph in dataset:
     for solver in solvers:
-        solver_instance = solver["class"](dataset["graph"], solver["params"])
+        solver_instance = solver["class"](graph["data"], solver["params"])
+        solver_instance.value_initializer = lambda _ : torch.normal(
+                        mean=initializations[graph["name"]]["SDP_solution"], std=torch.sqrt(torch.ones((len(initializations[graph["name"]]["SDP_solution"]))))*solver["params"]["std"]
+                    )
         solver_instance.solve()
         solution = {
             "solution_method": solver["name"],
-            "dataset_name": dataset["name"],
+            "dataset_name": graph["name"],
             "data": deepcopy(solver_instance.solution),
             "time_taken": deepcopy(solver_instance.solution_time),
         }
         print(
-            f"CSV: {dataset['name']}, {solution['data']['size']}, {solution['time_taken']}"
+            f"CSV: {graph['name']}, {solution['data']['size']}, {solution['time_taken']}"
         )
         solutions.append(solution)
         del solver_instance
         stage += 1
         print(f"Completed {stage} / {stages}")
 
-        if stage % (100*len(solvers)) == 0:
+        if stage % (10*len(solvers)) == 0:
             print("Now saving a check point.")
-            table_output(solutions, datasets, stage, stages)
+            table_output(solutions, dataset, stage, stages)
 
 print("Now saving final results.")
-table_output(solutions, datasets, stage, stages)
+table_output(solutions, dataset, stage, stages)
