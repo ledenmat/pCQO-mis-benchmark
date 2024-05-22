@@ -35,7 +35,7 @@ dataset_names = dataset_names[10:11]
 
 solvers = [
     {
-        "name": "Quadratic GNM Convergence",
+        "name": "Quadratic GNM Scalability",
         "class": Quadratic_Batch,
         "params": {
             "learning_rate": 0.1,
