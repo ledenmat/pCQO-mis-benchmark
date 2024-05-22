@@ -1,5 +1,6 @@
 import os
 import subprocess
+import re
 from lib.Solver import Solver
 import time
 from pathlib import Path
@@ -55,9 +56,17 @@ class ReduMIS(Solver):
         if self.seed is not None:
             redumis_command.append(f"--seed={self.seed}")
 
-        subprocess.check_output(redumis_command)
+        output_file = open("redumis.log", "w")
+        subprocess.run(redumis_command, shell=False, stdout=output_file, text=True)
+        output_file.close()
 
-        self._stop_timer()
+        solution_time_regex = r"(?<=Time found:).+([0-9]+.[0-9]+)"
+        with open("redumis.log", "r") as f:
+            for line in f:
+                if re.search(solution_time_regex, line):
+                    self.solution_time = float(
+                        re.search(solution_time_regex, line).group()
+                    )
 
         temp_graph_os_path.unlink(missing_ok=True)
 
@@ -66,7 +75,7 @@ class ReduMIS(Solver):
             result.pop()
             self.solution["graph_mask"] = numpy.array(result, dtype=int)
             self.solution["size"] = numpy.count_nonzero(
-                self.solution["graph_mask"] == 1  
+                self.solution["graph_mask"] == 1
             )
 
         temp_result_os_path.unlink(missing_ok=True)
