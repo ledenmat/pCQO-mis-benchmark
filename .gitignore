@@ -1,7 +1,6 @@
 .venv*
 __pycache__
 
-**/graphs/*
 **/SATLIB/*
 **/uf20_91/*
 **/output/*
@@ -10,3 +9,5 @@ __pycache__
 *.csv
 *.metis
 *.code-workspace
+**/archive/*
+./models

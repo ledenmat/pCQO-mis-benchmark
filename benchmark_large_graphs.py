@@ -2,10 +2,12 @@ import os
 from copy import deepcopy
 import networkx as nx
 import pickle
+import torch
 import pandas
 
-from solvers.dNNMIS_GPU_TAU import DNNMIS
-from solvers.Quadratic import Quadratic
+from solvers.CPSATMIS import CPSATMIS, GurobiMIS
+from solvers.Quadratic_Batch import Quadratic_Batch
+from solvers.KaMIS import ReduMIS
 
 #### GRAPH IMPORT ####
 
@@ -26,9 +28,42 @@ for graph_directory in graph_directories:
 graph_list = sorted(graph_list, key=lambda x: len(x))
 dataset_names = sorted(dataset_names, key=lambda x: len(x["name"]))
 
+graph_list = graph_list[10:11]
+dataset_names = dataset_names[10:11]
+
 #### SOLVER DESCRIPTION ####
 
 solvers = [
+    #     {
+    #     "name": "Quadratic GNM Convergence",
+    #     "class": Quadratic_Batch,
+    #     "params": {
+    #         "learning_rate": 0.1,
+    #         "number_of_steps": 5000,
+    #         "gamma": 4000,
+    #         "batch_size": 1024,
+    #         "std": 2.25,
+    #         "threshold": 0.0,
+    #         "steps_per_batch": 1000,
+    #         "graphs_per_optimizer": 256
+    #     },
+    # },
+        {
+        "name": "Gurobi",
+        "class": GurobiMIS,
+        "params": {
+        }
+    },
+    {
+        "name": "CPSAT",
+        "class": CPSATMIS,
+        "params": {}
+    }
+    #     {
+    #     "name": "ReduMIS",
+    #     "class": ReduMIS,
+    #     "params": {"time_limit": 100},
+    # }
     # {
     #     "name": "Quadratic Normalized",
     #     "class": Quadratic,
@@ -55,16 +90,6 @@ solvers = [
     #         "normalized": False
     #     },
     # },
-    {
-        "name": "Carl-Net",
-        "class": DNNMIS,
-        "params": {
-            "learning_rate": 0.05,
-            "number_of_steps": 50000,
-            "solve_interval": 100,
-            "weight_decay": 0.05
-        },
-    },
 ]
 
 #### SOLUTION OUTPUT FUNCTION ####
@@ -115,6 +140,29 @@ for graph_filename in graph_list:
     for solver in solvers:
         
         solver_instance = solver["class"](dataset["graph"], solver["params"])
+
+        mean_vector = []
+        std = []
+        degrees = dict(dataset["graph"].degree())
+
+        # Find the maximum degree
+        max_degree = max(degrees.values())
+
+        for _, degree in dataset["graph"].degree():
+            degree_init = 1 - degree/max_degree
+            mean_vector.append(degree_init)
+            std.append(1.75)
+
+        min_degree_initialization = max(mean_vector)
+
+        for i in range(len(mean_vector)):
+            mean_vector[i] = mean_vector[i] / min_degree_initialization
+
+
+        # solver_instance.value_initializer = lambda _ : torch.normal(
+        #                 mean=torch.Tensor(mean_vector), std=solver["params"]["std"]
+        #             )
+
         solver_instance.solve()
         solution = {
             "solution_method": solver["name"],
@@ -128,7 +176,7 @@ for graph_filename in graph_list:
         stage += 1
         print(f"Completed {stage} / {stages}")
 
-        if stage % 5 == 0:
+        if stage % len(solvers) == 0:
             print("Now saving a check point.")
             table_output(solutions, dataset_names, stage, stages)
     del dataset
