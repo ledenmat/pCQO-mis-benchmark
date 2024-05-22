@@ -2,6 +2,7 @@ import os
 import pickle
 import networkx as nx
 
+
 def assemble_dataset_from_gpickle(graph_directories):
     dataset = []
     for graph_directory in graph_directories:

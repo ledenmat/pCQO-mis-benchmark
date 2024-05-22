@@ -2,6 +2,7 @@ from mosek.fusion import Model, Domain, ObjectiveSense, Expr
 import torch
 import numpy as np
 
+
 def solve_SDP(graph):
     n = len(graph)
     matrix_of_ones = np.ones((n, n))

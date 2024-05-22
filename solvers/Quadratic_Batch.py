@@ -9,13 +9,16 @@ import torch.optim as optim
 import time
 from lib.Solver import Solver
 
-def loss_function(Matrix_X, adjacency_matrix_tensor,adjacency_matrix_tensor_comp, gamma, beta):
+
+def loss_function(
+    Matrix_X, adjacency_matrix_tensor, adjacency_matrix_tensor_comp, gamma, beta
+):
 
     summed_weights = Matrix_X.sum()
 
-    second_term = (gamma/2) * (Matrix_X.T @ (adjacency_matrix_tensor) @ Matrix_X)
+    second_term = (gamma / 2) * (Matrix_X.T @ (adjacency_matrix_tensor) @ Matrix_X)
 
-    third_term = (beta/2) * ((Matrix_X.T @ (adjacency_matrix_tensor_comp)) @ Matrix_X)
+    third_term = (beta / 2) * ((Matrix_X.T @ (adjacency_matrix_tensor_comp)) @ Matrix_X)
 
     loss = -summed_weights + second_term - third_term
 
@@ -60,7 +63,7 @@ class Quadratic_Batch(Solver):
 
         self.steps_per_batch = params.get("steps_per_batch", 350)
 
-        self.log_every_n_steps = params.get("log_every_n_steps", self.steps_per_batch)
+        self.output_interval = params.get("output_interval", self.steps_per_batch)
 
         self.graphs_per_optimizer = params.get("graphs_per_optimizer", 128)
 
@@ -158,7 +161,9 @@ class Quadratic_Batch(Solver):
 
         steps_to_best_MIS = 0
 
-        per_sample_grad_funct = vmap(grad(loss_function), in_dims=(0, None, None, None, None))
+        per_sample_grad_funct = vmap(
+            grad(loss_function), in_dims=(0, None, None, None, None)
+        )
 
         if device == "cuda:0":
             torch.cuda.synchronize()
@@ -179,13 +184,20 @@ class Quadratic_Batch(Solver):
                 zero_grad_time = time.time()
                 print("time to zero gradients:", zero_grad_time - start_time)
 
-            per_sample_gradients = torch.split(per_sample_grad_funct(Matrix_X, adjacency_matrix_tensor, adjacency_matrix_tensor_comp, gamma, beta), self.graphs_per_optimizer)
-
+            per_sample_gradients = torch.split(
+                per_sample_grad_funct(
+                    Matrix_X,
+                    adjacency_matrix_tensor,
+                    adjacency_matrix_tensor_comp,
+                    gamma,
+                    beta,
+                ),
+                self.graphs_per_optimizer,
+            )
 
             with torch.no_grad():
                 for i, part in enumerate(parts):
                     part.grad = per_sample_gradients[i]
-
 
             if test_runtime:
                 torch.cuda.synchronize()
@@ -194,8 +206,7 @@ class Quadratic_Batch(Solver):
                     "time to compute back propagation:",
                     backpropagation_time - zero_grad_time,
                 )
-            
-            
+
             for optimizer in optimizers:
                 optimizer.step()
             # optimizer.step()  # Update the parameters
@@ -221,7 +232,7 @@ class Quadratic_Batch(Solver):
                 )
 
             if (iteration_t + 1) % self.steps_per_batch == 0:
-                
+
                 masks = Matrix_X.data[:, :] > self.threshold
 
                 for batch_id, mask in enumerate(masks):
@@ -254,13 +265,11 @@ class Quadratic_Batch(Solver):
                             torch.empty((self.graph_order))
                         )
                         Matrix_X = Matrix_X.to(device).requires_grad_(True)
-                        
 
-            if (iteration_t + 1) % self.log_every_n_steps == 0:
+            if (iteration_t + 1) % self.output_interval == 0:
                 print(
                     f"Step {iteration_t + 1}/{number_of_iterations_T}, IS: {MIS}, lr: {learning_rate_alpha}, MIS Size: {best_MIS}"
                 )
-                
 
         if device == "cuda:0":
             torch.cuda.synchronize()

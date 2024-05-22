@@ -6,6 +6,7 @@ from lib.Solver import Solver
 import csv
 import time
 
+
 class VarArraySolutionPrinter(cp_model.CpSolverSolutionCallback):
     """Print intermediate solutions."""
 
@@ -60,7 +61,7 @@ class CPSATMIS(Solver):
             solver.parameters.max_time_in_seconds = float(self.time_limit)
 
         # Create a binary variable for each node
-        node_vars = {node: model.NewBoolVar(f'node_{node}') for node in self.G.nodes}
+        node_vars = {node: model.NewBoolVar(f"node_{node}") for node in self.G.nodes}
 
         # Add constraints: no two adjacent nodes can both be in the independent set
         for u, v in self.G.edges:
@@ -71,26 +72,30 @@ class CPSATMIS(Solver):
 
         if self.print_intermediate:
             # Prepare the solution printer
-            solution_printer = VarArraySolutionPrinter(list(node_vars.values()), limit=30)  
-                # Adjust limit as needed
+            solution_printer = VarArraySolutionPrinter(
+                list(node_vars.values()), limit=30
+            )
+            # Adjust limit as needed
             # Start the solver and pass the solution printer
             status = solver.Solve(model, solution_printer)
-            print(f'Number of solutions found: {solution_printer.solution_count()}')
+            print(f"Number of solutions found: {solution_printer.solution_count()}")
         else:
             # Start the solver without the solution printer
             status = solver.Solve(model)
 
         # Solve the model
-        #status = solver.Solve(model)
+        # status = solver.Solve(model)
 
         if status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-            solution_nodes = [node for node, var in node_vars.items() if solver.Value(var) == 1]
-            self.solution['graph_mask'] = np.zeros(len(node_vars))
-            self.solution['graph_mask'][solution_nodes] = 1
-            self.solution['size'] = len(solution_nodes)
+            solution_nodes = [
+                node for node, var in node_vars.items() if solver.Value(var) == 1
+            ]
+            self.solution["graph_mask"] = np.zeros(len(node_vars))
+            self.solution["graph_mask"][solution_nodes] = 1
+            self.solution["size"] = len(solution_nodes)
         else:
-            self.solution['graph_mask'] = np.zeros(len(node_vars))
-            self.solution['size'] = 0
+            self.solution["graph_mask"] = np.zeros(len(node_vars))
+            self.solution["size"] = 0
 
         self.solution_time = solver.WallTime()
 
@@ -108,14 +113,11 @@ class GurobiMIS(Solver):
     def data_cb(self, model, where):
         if where == GRB.Callback.MIP:
             cur_obj = model.cbGet(GRB.Callback.MIP_OBJBST)
-            cur_bd = model.cbGet(GRB.Callback.MIP_OBJBND)
 
-            
             self._stop_timer()
             if len(self.paths) == 0 or self.paths[-1] < cur_obj:
                 self.times.append(self.solution_time)
                 self.paths.append(cur_obj)
-
 
     def solve(self):
         # Create a new Gurobi model
@@ -123,10 +125,13 @@ class GurobiMIS(Solver):
 
         # Set the time limit if specified
         if self.time_limit is not None:
-            self.model.setParam('TimeLimit', self.time_limit)
+            self.model.setParam("TimeLimit", self.time_limit)
 
         # Create a binary variable for each node
-        node_vars = {node: self.model.addVar(vtype=GRB.BINARY, name=f"node_{node}") for node in self.G.nodes}
+        node_vars = {
+            node: self.model.addVar(vtype=GRB.BINARY, name=f"node_{node}")
+            for node in self.G.nodes
+        }
 
         # Add constraints: no two adjacent nodes can both be in the independent set
         for u, v in self.G.edges:
@@ -134,7 +139,9 @@ class GurobiMIS(Solver):
                 self.model.addConstr(node_vars[u] + node_vars[v] <= 1, f"edge_{u}_{v}")
 
         # Set the objective: maximize the sum of the selected nodes
-        self.model.setObjective(quicksum(node_vars[node] for node in self.G.nodes), GRB.MAXIMIZE)
+        self.model.setObjective(
+            quicksum(node_vars[node] for node in self.G.nodes), GRB.MAXIMIZE
+        )
 
         # Optimize the model
         self._start_timer()
@@ -142,14 +149,15 @@ class GurobiMIS(Solver):
         self.solution_time = self.model.Runtime
         # Check if a valid solution exists
         if self.model.status == GRB.OPTIMAL or self.model.status == GRB.TIME_LIMIT:
-            self.solution['graph_mask'] = [int(node_vars[node].X) for node in self.G.nodes]
-            self.solution['size'] = sum(self.solution['graph_mask'])
+            self.solution["graph_mask"] = [
+                int(node_vars[node].X) for node in self.G.nodes
+            ]
+            self.solution["size"] = sum(self.solution["graph_mask"])
             print(f"Maximum Independent Set size: {self.solution['size']}")
         else:
             print("No valid solution found.")
-            self.solution['graph_mask'] = []
-            self.solution['size'] = 0
-        
+            self.solution["graph_mask"] = []
+            self.solution["size"] = 0
 
         print(self.paths, self.times)
 
@@ -172,4 +180,3 @@ if __name__ == "__main__":
     # Initialize and solve the MIS problem
     solver = GurobiMIS(G, params)
     solver.solve()
-

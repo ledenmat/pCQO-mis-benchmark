@@ -11,7 +11,7 @@ from solvers.KaMIS import ReduMIS
 
 #### GRAPH IMPORT ####
 
-graph_directories = ["./graphs/gnm_random_graph_50-2000"]
+graph_directories = ["./graphs/gnm_random_graph_scalability"]
 
 dataset = {}
 
@@ -34,67 +34,35 @@ dataset_names = dataset_names[10:11]
 #### SOLVER DESCRIPTION ####
 
 solvers = [
-    #     {
-    #     "name": "Quadratic GNM Convergence",
-    #     "class": Quadratic_Batch,
-    #     "params": {
-    #         "learning_rate": 0.1,
-    #         "number_of_steps": 5000,
-    #         "gamma": 4000,
-    #         "batch_size": 1024,
-    #         "std": 2.25,
-    #         "threshold": 0.0,
-    #         "steps_per_batch": 1000,
-    #         "graphs_per_optimizer": 256
-    #     },
-    # },
-        {
-        "name": "Gurobi",
-        "class": GurobiMIS,
-        "params": {
-        }
-    },
     {
-        "name": "CPSAT",
-        "class": CPSATMIS,
-        "params": {}
-    }
-    #     {
-    #     "name": "ReduMIS",
-    #     "class": ReduMIS,
-    #     "params": {"time_limit": 100},
-    # }
-    # {
-    #     "name": "Quadratic Normalized",
-    #     "class": Quadratic,
-    #     "params": {
-    #         "learning_rate": 0.05,
-    #         "number_of_steps": 2000,
-    #         "gamma": 2000,
-    #         "batch_size": 8,
-    #         "lr_gamma": 0.2,
-    #         "threshold": 0.0,
-    #         "normalized": True
-    #     },
-    # },
-    # {
-    #     "name": "Quadratic Standard",
-    #     "class": Quadratic,
-    #     "params": {
-    #         "learning_rate": 0.05,
-    #         "number_of_steps": 10000,
-    #         "gamma": 2000,
-    #         "batch_size": 8,
-    #         "lr_gamma": 0.2,
-    #         "threshold": 0.0,
-    #         "normalized": False
-    #     },
-    # },
+        "name": "Quadratic GNM Convergence",
+        "class": Quadratic_Batch,
+        "params": {
+            "learning_rate": 0.1,
+            "number_of_steps": 5000,
+            "gamma": 4000,
+            "batch_size": 1024,
+            "std": 2.25,
+            "threshold": 0.0,
+            "steps_per_batch": 1000,
+            "graphs_per_optimizer": 256,
+        },
+    },
+    {"name": "Gurobi", "class": GurobiMIS, "params": {}},
+    {"name": "CPSAT", "class": CPSATMIS, "params": {}},
+    {
+        "name": "ReduMIS",
+        "class": ReduMIS,
+        "params": {"time_limit": 100},
+    },
 ]
+
 
 #### SOLUTION OUTPUT FUNCTION ####
 def table_output(solutions, datasets, current_stage, total_stages):
-    dataset_index = {k: v for v, k in enumerate([dataset["name"] for dataset in datasets])}
+    dataset_index = {
+        k: v for v, k in enumerate([dataset["name"] for dataset in datasets])
+    }
     datasets_solutions = [[] for i in range(len(datasets))]
     table_data = []
 
@@ -105,9 +73,11 @@ def table_output(solutions, datasets, current_stage, total_stages):
     i = 0
     for dataset_solutions in datasets_solutions:
         if len(dataset_solutions) > 0:
-            table_row = [dataset_solutions[0]['dataset_name']]
+            table_row = [dataset_solutions[0]["dataset_name"]]
 
-            table_row.extend([solution["data"]["size"] for solution in dataset_solutions])
+            table_row.extend(
+                [solution["data"]["size"] for solution in dataset_solutions]
+            )
             table_row.extend([solution["time_taken"] for solution in dataset_solutions])
 
             table_data.append(table_row)
@@ -129,35 +99,33 @@ stages = len(solvers) * len(graph_list)
 
 for graph_filename in graph_list:
     print("Graph ", graph_filename, "is being imported ...")
-    with open(graph_filename, 'rb') as f:
+    with open(graph_filename, "rb") as f:
         G = pickle.load(f)
         dataset = {
             "name": graph_filename[:-8],
-            "graph": nx.relabel.convert_node_labels_to_integers(
-                G, first_label=0
-            ),
+            "graph": nx.relabel.convert_node_labels_to_integers(G, first_label=0),
         }
     for solver in solvers:
-        
+
         solver_instance = solver["class"](dataset["graph"], solver["params"])
 
-        mean_vector = []
-        std = []
-        degrees = dict(dataset["graph"].degree())
+        ### Degree Based Initialization (Optional) ###
+        # mean_vector = []
+        # std = []
+        # degrees = dict(dataset["graph"].degree())
 
-        # Find the maximum degree
-        max_degree = max(degrees.values())
+        # # Find the maximum degree
+        # max_degree = max(degrees.values())
 
-        for _, degree in dataset["graph"].degree():
-            degree_init = 1 - degree/max_degree
-            mean_vector.append(degree_init)
-            std.append(1.75)
+        # for _, degree in dataset["graph"].degree():
+        #     degree_init = 1 - degree / max_degree
+        #     mean_vector.append(degree_init)
+        #     std.append(1.75)
 
-        min_degree_initialization = max(mean_vector)
+        # min_degree_initialization = max(mean_vector)
 
-        for i in range(len(mean_vector)):
-            mean_vector[i] = mean_vector[i] / min_degree_initialization
-
+        # for i in range(len(mean_vector)):
+        #     mean_vector[i] = mean_vector[i] / min_degree_initialization
 
         # solver_instance.value_initializer = lambda _ : torch.normal(
         #                 mean=torch.Tensor(mean_vector), std=solver["params"]["std"]
@@ -170,7 +138,9 @@ for graph_filename in graph_list:
             "data": deepcopy(solver_instance.solution),
             "time_taken": deepcopy(solver_instance.solution_time),
         }
-        print(f"CSV: {dataset['name']}, {solution['data']['size']}, {solution['time_taken']}")
+        print(
+            f"CSV: {dataset['name']}, {solution['data']['size']}, {solution['time_taken']}"
+        )
         solutions.append(solution)
         del solver_instance
         stage += 1
