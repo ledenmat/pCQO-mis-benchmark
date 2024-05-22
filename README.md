@@ -42,7 +42,8 @@ This repository houses the code for a submission titled: "Dataless Quadratic Net
    ```
 5. Obtain licenses for MOSEK and Gurobi and install those licenses on the machine you will be running this repository on.
 6. Clone the [KaMIS project](https://github.com/KarlsruheMIS/KaMIS) and build a copy of the ReduMIS program. Place the program in the `external` folder of this repository.
-7. Run the benchmarking suite:
+7. Unzip datasets.zip to retrieve the datasets used in the original experiments.
+8. Run the benchmarking suite:
    ```bash
    python benchmark.py
    ```
