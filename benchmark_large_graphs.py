@@ -11,7 +11,7 @@ from solvers.KaMIS import ReduMIS
 
 #### GRAPH IMPORT ####
 
-graph_directories = ["./graphs/gnm_random_graph_scalability"]
+graph_directories = ["./graphs/gnm_random_graph_800"]
 
 dataset = {}
 
@@ -28,18 +28,15 @@ for graph_directory in graph_directories:
 graph_list = sorted(graph_list, key=lambda x: len(x))
 dataset_names = sorted(dataset_names, key=lambda x: len(x["name"]))
 
-graph_list = graph_list[10:11]
-dataset_names = dataset_names[10:11]
-
 #### SOLVER DESCRIPTION ####
 
-solvers = [
+og_solvers = [
     {
         "name": "Quadratic GNM Scalability",
         "class": Quadratic_Batch,
         "params": {
             "learning_rate": 0.1,
-            "number_of_steps": 5000,
+            "number_of_steps": 20000,
             "gamma": 4000,
             "batch_size": 1024,
             "std": 2.25,
@@ -48,15 +45,32 @@ solvers = [
             "graphs_per_optimizer": 256,
         },
     },
-    {"name": "Gurobi", "class": GurobiMIS, "params": {}},
-    {"name": "CPSAT", "class": CPSATMIS, "params": {}},
-    {
-        "name": "ReduMIS",
-        "class": ReduMIS,
-        "params": {"time_limit": 100},
-    },
+    # {"name": "Gurobi", "class": GurobiMIS, "params": {}},
+    # {"name": "CPSAT", "class": CPSATMIS, "params": {}},
+    # {
+    #     "name": "ReduMIS",
+    #     "class": ReduMIS,
+    #     "params": {"time_limit": 100},
+    # },
 ]
 
+solvers = []
+
+for solver in og_solvers:
+    for beta in [(.1, .4)]:
+        for steps_per_batch in [400]:
+            for batch_size in [2048]:
+                for lr in [.5]:
+                    for number_of_steps in [10000]:
+                        modified_solver = deepcopy(solver)
+                        modified_solver["name"] = f"{modified_solver['name']} b1={beta[0]} b2={beta[1]} steps_per_batch={steps_per_batch} lr={lr} batch_size={batch_size} number_of_steps={number_of_steps}"
+                        modified_solver["params"]["steps_per_batch"] = steps_per_batch
+                        modified_solver["params"]["adam_beta_1"] = beta[0]
+                        modified_solver["params"]["adam_beta_2"] = beta[1]
+                        modified_solver["params"]["learning_rate"] = lr
+                        modified_solver["params"]["batch_size"] = batch_size
+                        modified_solver["params"]["number_of_steps"] = number_of_steps
+                        solvers.append(modified_solver)
 
 #### SOLUTION OUTPUT FUNCTION ####
 def table_output(solutions, datasets, current_stage, total_stages):
@@ -105,31 +119,30 @@ for graph_filename in graph_list:
             "name": graph_filename[:-8],
             "graph": nx.relabel.convert_node_labels_to_integers(G, first_label=0),
         }
-    for solver in solvers:
+    for index, solver in enumerate(solvers):
 
         solver_instance = solver["class"](dataset["graph"], solver["params"])
 
         ### Degree Based Initialization (Optional) ###
-        # mean_vector = []
-        # std = []
-        # degrees = dict(dataset["graph"].degree())
+        mean_vector = []
+        std = []
+        degrees = dict(dataset["graph"].degree())
 
-        # # Find the maximum degree
-        # max_degree = max(degrees.values())
+        # Find the maximum degree
+        max_degree = max(degrees.values())
 
-        # for _, degree in dataset["graph"].degree():
-        #     degree_init = 1 - degree / max_degree
-        #     mean_vector.append(degree_init)
-        #     std.append(1.75)
+        for _, degree in dataset["graph"].degree():
+            degree_init = 1 - degree / max_degree
+            mean_vector.append(degree_init)
 
-        # min_degree_initialization = max(mean_vector)
+        min_degree_initialization = max(mean_vector)
 
-        # for i in range(len(mean_vector)):
-        #     mean_vector[i] = mean_vector[i] / min_degree_initialization
+        for i in range(len(mean_vector)):
+            mean_vector[i] = mean_vector[i] / min_degree_initialization
 
-        # solver_instance.value_initializer = lambda _ : torch.normal(
-        #                 mean=torch.Tensor(mean_vector), std=solver["params"]["std"]
-        #             )
+        solver_instance.value_initializer = lambda _ : torch.normal(
+                        mean=torch.Tensor(mean_vector), std=solver["params"]["std"]
+                    )
 
         solver_instance.solve()
         solution = {
