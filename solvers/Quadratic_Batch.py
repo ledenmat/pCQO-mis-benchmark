@@ -1,31 +1,30 @@
 import torch
 from torch.func import grad, vmap
+import torch.optim as optim
 
 import networkx as nx
 from networkx import Graph
-
-import torch.optim as optim
 
 import time
 from lib.Solver import Solver
 
 
-# def loss_function(
-#     Matrix_X, adjacency_matrix_tensor, adjacency_matrix_tensor_comp, gamma, beta
-# ):
+def three_term_loss_function(
+    Matrix_X, adjacency_matrix_tensor, adjacency_matrix_tensor_comp, gamma, beta
+):
 
-#     summed_weights = Matrix_X.sum()
+    summed_weights = Matrix_X.sum()
 
-#     second_term = (gamma / 2) * (Matrix_X.T @ (adjacency_matrix_tensor) @ Matrix_X)
+    second_term = (gamma / 2) * (Matrix_X.T @ (adjacency_matrix_tensor) @ Matrix_X)
 
-#     third_term = (beta / 2) * ((Matrix_X.T @ (adjacency_matrix_tensor_comp)) @ Matrix_X)
+    third_term = (beta / 2) * ((Matrix_X.T @ (adjacency_matrix_tensor_comp)) @ Matrix_X)
 
-#     loss = -summed_weights + second_term - third_term
+    loss = -summed_weights + second_term - third_term
 
-#     return loss
+    return loss
 
-def loss_function(
-    Matrix_X, adjacency_matrix_tensor, gamma, beta
+def two_term_loss_function(
+    Matrix_X, adjacency_matrix_tensor, gamma
 ):
 
     summed_weights = Matrix_X.sum()
@@ -67,6 +66,8 @@ class Quadratic_Batch(Solver):
         self.graph = G
 
         self.beta = params.get("beta", 1)
+
+        self.number_of_terms = params.get("number_of_terms", "three")
 
         self.gamma = params.get("gamma", 625)
 
@@ -156,7 +157,8 @@ class Quadratic_Batch(Solver):
         number_of_iterations_T = self.number_of_steps
 
         adjacency_matrix_tensor = adjacency_matrix_dense.to(device)
-        adjacency_matrix_tensor_comp = adjacency_matrix_comp_dense.to(device)
+        if self.number_of_terms == "three":
+            adjacency_matrix_tensor_comp = adjacency_matrix_comp_dense.to(device)
 
         # Define Optimizer over matrix X
         with torch.no_grad():
@@ -166,9 +168,6 @@ class Quadratic_Batch(Solver):
 
         for part in parts:
             optimizers.append(optim.Adam([part], learning_rate_alpha, betas=(self.adam_beta_1, self.adam_beta_2)))
-
-        # optimizer = optim.Adam(parts, lr=learning_rate_alpha)
-        # optimizer2 = optim.Adam([part_two], lr=learning_rate_alpha)
 
         best_MIS = 0
         MIS = []
@@ -191,9 +190,14 @@ class Quadratic_Batch(Solver):
 
         steps_to_best_MIS = 0
 
-        per_sample_grad_funct = vmap(
-            grad(loss_function), in_dims=(0, None, None, None) #, None)
-        )
+        if self.number_of_terms == "three":
+            per_sample_grad_funct = vmap(
+                grad(three_term_loss_function), in_dims=(0, None, None, None, None)
+            )
+        else:
+            per_sample_grad_funct = vmap(
+                grad(two_term_loss_function), in_dims=(0, None, None)
+            )
 
         if device == "cuda:0":
             torch.cuda.synchronize()
@@ -211,16 +215,26 @@ class Quadratic_Batch(Solver):
                 zero_grad_time = time.time()
                 zero_grad_time_cum += zero_grad_time - start_time
 
-            per_sample_gradients = torch.split(
-                per_sample_grad_funct(
-                    Matrix_X,
-                    adjacency_matrix_tensor,
-                    # adjacency_matrix_tensor_comp,
-                    gamma,
-                    beta,
-                ),
-                self.graphs_per_optimizer,
-            )
+            if self.number_of_terms == "three":
+                per_sample_gradients = torch.split(
+                    per_sample_grad_funct(
+                        Matrix_X,
+                        adjacency_matrix_tensor,
+                        adjacency_matrix_tensor_comp,
+                        gamma,
+                        beta,
+                    ),
+                    self.graphs_per_optimizer,
+                )
+            else:
+                per_sample_gradients = torch.split(
+                    per_sample_grad_funct(
+                        Matrix_X,
+                        adjacency_matrix_tensor,
+                        gamma,
+                    ),
+                    self.graphs_per_optimizer,
+                )
 
             with torch.no_grad():
                 for i, part in enumerate(parts):
@@ -249,26 +263,6 @@ class Quadratic_Batch(Solver):
                 box_constraint_time_cum += box_constraint_time - optim_step_time
 
             if (iteration_t + 1) % self.steps_per_batch == 0:
-
-                # masks = Matrix_X.data[:, :] > self.threshold
-
-                # for mask in masks:
-                #     indices = mask.nonzero(as_tuple=True)[0].tolist()
-                #     subgraph = self.graph.subgraph(indices)
-                #     local_IS = indices
-
-                #     # If no MIS, move on
-                #     # if MIS_checker(MIS, G)[0] is False: MIS = []
-                #     if any(subgraph.edges()):
-                #         local_IS = []
-
-                #     IS_length = len(local_IS)
-
-                #     if IS_length > best_MIS:
-                #         steps_to_best_MIS = iteration_t
-                #         best_MIS = IS_length
-                #         MIS = local_IS
-
                 masks = Matrix_X.data[:,:].bool().float().clone()
                 output_tensors.append(masks)
                 n = self.graph_order
@@ -323,27 +317,6 @@ class Quadratic_Batch(Solver):
                 print(
                     f"Step {iteration_t + 1}/{number_of_iterations_T}, IS: {MIS}, lr: {learning_rate_alpha}, MIS Size: {best_MIS}"
                 )
-
-        # n = self.graph_order
-        # for output_tensor in output_tensors:
-        #     for batch_id, X_torch_binarized in enumerate(output_tensor):
-        #         if X_torch_binarized.sum() != 0 and (X_torch_binarized.T @ adjacency_matrix_tensor @ X_torch_binarized) == 0:
-        #             # we have an IS. Next, we check if this IS is maximal based on the proof of the second theorem: Basically, we are checking if it is a local min based on the fixed point definition:
-        #             # if for some gradient update, we are still at the boundary, then we have maximal IS
-        #             X_torch_binarized_update = X_torch_binarized - 0.1*(-torch.ones(n, device=device) + (n*adjacency_matrix_tensor - adjacency_matrix_tensor_comp)@X_torch_binarized)
-        #             # Projection to [0,1]
-        #             X_torch_binarized_update[X_torch_binarized_update>=1] =1
-        #             X_torch_binarized_update[X_torch_binarized_update<=0] =0
-        #             if torch.equal(X_torch_binarized, X_torch_binarized_update):
-        #                 initializations_solved += 1
-        #                 indices_to_replace.append(batch_id)
-        #                 # we have a maximal IS:
-        #                 MIS = torch.nonzero(X_torch_binarized).squeeze()
-        #                 # Exit the function with True
-        #                 if len(MIS) > best_MIS:
-        #                     steps_to_best_MIS = iteration_t+1
-        #                     best_MIS = len(MIS)
-        #                     MIS = MIS
 
         if device == "cuda:0":
             torch.cuda.synchronize()
