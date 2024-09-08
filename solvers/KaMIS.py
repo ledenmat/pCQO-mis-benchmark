@@ -97,3 +97,16 @@ class ReduMIS(Solver):
                 sorted_neighbors = list(map(int, neighbors.keys()))
                 sorted_neighbors.sort()
                 f.write(f"{' '.join(list(map(str, sorted_neighbors)))}\n")
+
+
+if __name__ == "__main__":
+    # Create a simple example graph
+    G = networkx.Graph()
+    G.add_edges_from([(1, 2), (1, 3), (2, 3), (3, 4)])
+
+    # Set parameters
+    params = {"time_limit": 10}  # 10 seconds time limit
+
+    # Initialize and solve the MIS problem
+    solver = ReduMIS(G, params)
+    solver.solve()
