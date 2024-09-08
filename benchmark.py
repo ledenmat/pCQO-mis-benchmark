@@ -4,18 +4,18 @@ import pandas
 import torch
 
 from lib.dataset_generation import assemble_dataset_from_gpickle
-
 from solvers.pCQO_MIS import pCQOMIS
 from solvers.CPSAT_MIS import CPSATMIS
 from solvers.Gurobi_MIS import GurobiMIS
 from solvers.KaMIS import ReduMIS
 from solvers.dNN_Alkhouri_MIS import DNNMIS
 
+# Interval for saving solution checkpoints
 SOLUTION_SAVE_INTERVAL = 3
-
 
 #### GRAPH IMPORT ####
 
+# List of directories containing graph data
 graph_directories = [
     ### ER 700-800 Graphs ###
     "./graphs/er_700-800"
@@ -37,14 +37,16 @@ graph_directories = [
     # "./graphs/er_20"
 ]
 
+# Assemble dataset from .gpickle files in the specified directories
 dataset = assemble_dataset_from_gpickle(graph_directories)
 
 #### SOLVER DESCRIPTION ####
 
+# Define solvers and their parameters
 solvers = [
     {"name": "Gurobi", "class": GurobiMIS, "params": {"time_limit": 30}},
     {"name": "CPSAT", "class": CPSATMIS, "params": {"time_limit": 30}},
-    # {"name": "ReduMIS", "class": ReduMIS, "params": {}},
+    {"name": "ReduMIS", "class": ReduMIS, "params": {}},
     {
         "name": "pCQO_MIS ER",
         "class": pCQOMIS,
@@ -62,6 +64,7 @@ solvers = [
             "output_interval": 9900,
         },
     },
+    # Uncomment and configure the following solver for SATLIB datasets if needed
     # {
     #     "name": "pCQO_MIS SATLIB",
     #     "class": pCQOMIS,
@@ -80,65 +83,74 @@ solvers = [
     # }
 ]
 
-
 #### SOLUTION OUTPUT FUNCTION ####
 def table_output(solutions, datasets, current_stage, total_stages):
-    dataset_index = {
-        k: v for v, k in enumerate([dataset["name"] for dataset in datasets])
-    }
-    datasets_solutions = [[] for i in range(len(datasets))]
+    """
+    Saves the solutions to a CSV file.
+
+    Args:
+        solutions (list): List of solution dictionaries.
+        datasets (list): List of dataset dictionaries.
+        current_stage (int): Current stage in the benchmarking process.
+        total_stages (int): Total number of stages in the benchmarking process.
+    """
+    # Create a mapping of dataset names to indices
+    dataset_index = {dataset["name"]: index for index, dataset in enumerate(datasets)}
+    datasets_solutions = [[] for _ in range(len(datasets))]
     table_data = []
 
+    # Organize solutions by dataset
     for solution in solutions:
-        dsi = dataset_index[solution["dataset_name"]]
-        datasets_solutions[dsi].append(solution)
+        dataset_idx = dataset_index[solution["dataset_name"]]
+        datasets_solutions[dataset_idx].append(solution)
 
-    i = 0
+    # Prepare data for the output table
     for dataset_solutions in datasets_solutions:
-        if len(dataset_solutions) > 0:
+        if dataset_solutions:
             table_row = [dataset_solutions[0]["dataset_name"]]
+            column_headings = [solution["solution_method"] for solution in dataset_solutions]
 
-            column_headings = [
-                solution["solution_method"] for solution in dataset_solutions
-            ]
-
-            table_row.extend(
-                [solution["data"]["size"] for solution in dataset_solutions]
-            )
+            # Collect sizes and times for each solution
+            table_row.extend([solution["data"]["size"] for solution in dataset_solutions])
+            # Uncomment to include steps to solution size if available
             # table_row.extend([solution['data']['steps_to_best_MIS'] for solution in dataset_solutions])
             table_row.extend([solution["time_taken"] for solution in dataset_solutions])
 
             table_data.append(table_row)
 
+    # Generate headers for the CSV file
     table_headers = ["Dataset Name"]
-
     table_headers.extend([heading + " Solution Size" for heading in column_headings])
+    # Uncomment to include headers for steps to solution size if available
     # table_headers.extend([heading + " # Steps to Solution Size" for heading in column_headings])
     table_headers.extend([heading + " Solution Time" for heading in column_headings])
 
+    # Save the data to a CSV file
     table = pandas.DataFrame(table_data, columns=table_headers)
     table.to_csv(f"zero_to_stage_{current_stage}_of_{total_stages}_total_stages.csv")
-
 
 #### BENCHMARKING CODE ####
 solutions = []
 
+# Calculate total number of stages
 stage = 0
 stages = len(solvers) * len(dataset)
 
-### Part of SDP initializer (Optional) ###
+# Optional: Load SDP initializer if needed
 # initializations = pickle.load(open("./solutions/SDP/SDP_Generation_SATLIB", "rb"))
 
+# Iterate over each graph in the dataset
 for graph in dataset:
     for solver in solvers:
         solver_instance = solver["class"](graph["data"], solver["params"])
 
-        ### SDP Based Initializer (Optional) ###
-        # solver_instance.value_initializer = lambda _ : torch.normal(
-        #                 mean=initializations[graph["name"]]["SDP_solution"], std=torch.sqrt(torch.ones((len(initializations[graph["name"]]["SDP_solution"]))))*solver["params"]["std"]
-        #             )
-        ### End of SDP based Initializer ###
+        # Optional: Apply SDP-based initializer if needed
+        # solver_instance.value_initializer = lambda _: torch.normal(
+        #     mean=initializations[graph["name"]]["SDP_solution"],
+        #     std=torch.sqrt(torch.ones((len(initializations[graph["name"]]["SDP_solution"])))) * solver["params"]["std"]
+        # )
 
+        # Solve the problem using the current solver
         solver_instance.solve()
         solution = {
             "solution_method": solver["name"],
@@ -146,17 +158,18 @@ for graph in dataset:
             "data": deepcopy(solver_instance.solution),
             "time_taken": deepcopy(solver_instance.solution_time),
         }
-        print(
-            f"CSV: {graph['name']}, {solution['data']['size']}, {solution['time_taken']}"
-        )
+        print(f"CSV: {graph['name']}, {solution['data']['size']}, {solution['time_taken']}")
         solutions.append(solution)
         del solver_instance
+
+        # Update progress and save checkpoint if necessary
         stage += 1
         print(f"Completed {stage} / {stages}")
 
         if stage % (SOLUTION_SAVE_INTERVAL * len(solvers)) == 0:
-            print("Now saving a check point.")
+            print("Now saving a checkpoint.")
             table_output(solutions, dataset, stage, stages)
 
+# Save final results
 print("Now saving final results.")
 table_output(solutions, dataset, stage, stages)

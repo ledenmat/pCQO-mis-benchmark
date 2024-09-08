@@ -1,29 +1,32 @@
 import torch
 from torch import Tensor
-
 from lib.Solver import Solver
 from models.datalessnet import DatalessNet
-
 import networkx as nx
 
-# PARAMS:
-
-## max_steps: How many steps would you like to use to train your model?
-## selection_criteria: At what threshold should theta values be selected?
-## learning_rate: At what learning rate should your optimizer start at?
-## convergence_epsilon: To what value epsilon do you want to check convergence to?
-
-# OUTPUTS:
-
-## solution:
-### graph_mask: numpy array filled with 0s and 1s. 1s signify nodes in the MIS. Use this as a mask on the original graph to see MIS solution
-### graph_probabilities: numpy array with theta weight results for the entire graph
-### size: size of MIS
-### number_of_steps: number of steps needed to find the solution
-
-
 class DNNMIS(Solver):
+    """
+    A solver class for finding the Maximum Independent Set (MIS) of a graph using a
+    dataless neural network model. The neural network is trained to predict theta values
+    which are then used to determine the MIS.
+
+    Parameters:
+        G (networkx.Graph): The graph on which the MIS problem will be solved.
+        params (dict): Dictionary containing solver parameters:
+            - max_steps (int, optional): Maximum number of training steps for the model. Defaults to 100000.
+            - selection_criteria (float, optional): Threshold for selecting nodes based on theta values. Defaults to 0.5.
+            - learning_rate (float, optional): Learning rate for the optimizer. Defaults to 0.0001.
+            - use_cpu (bool, optional): Flag to use CPU for computations instead of GPU. Defaults to False.
+    """
+
     def __init__(self, G, params):
+        """
+        Initializes the DNNMIS solver with the given graph and parameters.
+
+        Args:
+            G (networkx.Graph): The graph to solve the MIS problem on.
+            params (dict): Parameters for the solver including max_steps, selection_criteria, learning_rate, and use_cpu.
+        """
         super().__init__()
         self.selection_criteria = params.get("selection_criteria", 0.5)
         self.learning_rate = params.get("learning_rate", 0.0001)
@@ -31,19 +34,36 @@ class DNNMIS(Solver):
         self.use_cpu = params.get("use_cpu", False)
 
         self.graph = G
-
         self.graph_order = len(G.nodes)
         print(self.graph_order)
 
         self.model = DatalessNet(G)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
-        self.loss_fn = lambda predicted, desired : predicted - desired
+        self.loss_fn = lambda predicted, desired: predicted - desired
         
         self.x = torch.ones(self.graph_order)
-        self.objective = torch.tensor(-(self.graph_order**2) / 2)
+        self.objective = torch.tensor(-(self.graph_order ** 2) / 2)
         self.solution = {}
 
     def solve(self):
+        """
+        Trains the neural network model to find the Maximum Independent Set (MIS) of the graph.
+
+        The method performs the following steps:
+        1. Trains the model for a specified number of steps.
+        2. Evaluates the model to get theta values.
+        3. Applies a selection criterion to determine which nodes are in the MIS.
+        4. Constructs the MIS by iteratively removing nodes with the highest degree from the subgraph.
+        5. Records the solution details including the graph mask, size of the MIS, and number of training steps.
+
+        Outputs:
+            - self.solution (dict): Contains the results of the MIS computation:
+                - graph_mask (list of int): List where 1s denote nodes in the MIS.
+                - graph_probabilities (list of float): Theta weight results for each node in the graph.
+                - size (int): Size of the MIS.
+                - number_of_steps (int): Number of training steps performed.
+                - steps_to_best_MIS (int): Number of steps to reach the best MIS (currently set to 0).
+        """
         device = torch.device("cuda:0" if torch.cuda.is_available() and not self.use_cpu else "cpu")
         print("using device: ", device)
 
