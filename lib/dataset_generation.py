@@ -3,11 +3,15 @@ import pickle
 import networkx as nx
 
 
-def assemble_dataset_from_gpickle(graph_directories):
+def assemble_dataset_from_gpickle(graph_directories, choose_n=None):
     dataset = []
     for graph_directory in graph_directories:
-        for filename in os.listdir(graph_directory):
+        graphs_found = 0
+        for  filename in os.listdir(graph_directory):
+            if choose_n and graphs_found >= choose_n:
+                break
             if filename.endswith(".gpickle"):
+                graphs_found+=1
                 print(
                     "Graph ",
                     os.path.join(graph_directory, filename),
