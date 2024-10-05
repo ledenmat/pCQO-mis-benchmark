@@ -226,16 +226,13 @@ class pCQOMIS_GD(Solver):
         logger.info("using device: %s", device)
 
 
-        Matrix_X = torch.empty((self.batch_size, self.graph_order))
+        Matrix_X = torch.empty((self.batch_size, self.graph_order), device=device, requires_grad=False)
         velocity_matrix = torch.zeros((self.batch_size, self.graph_order), device=device, requires_grad=False)
 
         for batch in range(self.batch_size):
             Matrix_X.data[batch, :] = self.initial_value_initializer(
                 torch.empty((self.graph_order))
             )
-
-        Matrix_X = Matrix_X.to(device)
-        Matrix_X = Matrix_X.requires_grad_(True)
 
         gamma = torch.tensor(self.gamma, device=device)
         beta = torch.tensor(self.beta, device=device)
@@ -324,8 +321,7 @@ class pCQOMIS_GD(Solver):
                 optim_step_time_cum += optim_step_time - per_sample_gradient_time
 
             # Box-constraining:
-            Matrix_X.data[Matrix_X >= 1] = 1
-            Matrix_X.data[Matrix_X <= 0] = 0
+            Matrix_X = Matrix_X.clamp(min=0, max=1)
 
             if self.test_runtime:
                 torch.cuda.synchronize()
@@ -371,15 +367,13 @@ class pCQOMIS_GD(Solver):
                     solution_times.append(self.solution_time)
 
                 # Restart X and the optimizer to search at a different point in [0,1]^n
-                with torch.no_grad():
-                    for batch in range(self.batch_size):
-                        Matrix_X.data[batch, :] = self.value_initializer(track_this,
-                            torch.empty((self.graph_order)).to(device)
-                        )
-                        # Matrix_X.data[batch, :] = self.initial_value_initializer(
-                        #     torch.empty((self.graph_order)).to(device)
-                        # )
-                        Matrix_X = Matrix_X.to(device).requires_grad_(True)
+                for batch in range(self.batch_size):
+                    Matrix_X.data[batch, :] = self.value_initializer(track_this,
+                        torch.empty((self.graph_order)).to(device)
+                    )
+                    # Matrix_X.data[batch, :] = self.initial_value_initializer(
+                    #     torch.empty((self.graph_order)).to(device)
+                    # )
 
                 if self.test_runtime:
                     torch.cuda.synchronize()
@@ -393,9 +387,6 @@ class pCQOMIS_GD(Solver):
         if device == "cuda:0":
             torch.cuda.synchronize()
         self._stop_timer()
-
-        if self.save_sample_path:
-            logger.info("Solution path: %s, Solution times: %s", solution_path, solution_times)
 
         logger.info("Steps to best MIS: %s", steps_to_best_MIS)
 
