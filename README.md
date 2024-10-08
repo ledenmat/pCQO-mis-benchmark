@@ -15,7 +15,6 @@ This repository houses the code for a submission titled: "Parallelized Clique-In
   - [Customization](#customization)
     - [Initializers](#initializers)
     - [Example: Degree-based Initializer](#example-degree-based-initializer)
-    - [Example: SDP-based Initializer](#example-sdp-based-initializer)
   - [Output](#output)
   - [Notes](#notes)
 
@@ -23,7 +22,7 @@ This repository houses the code for a submission titled: "Parallelized Clique-In
 ## Prerequisites
 
 - Python 3.10
-- Required libraries: `pandas`, `torch`, `mosek`, `gurobipy`, `ortools`
+- Required libraries: `pandas`, `torch`, `gurobipy`, `ortools`
 
 ## Setup and Installation
 
@@ -40,9 +39,9 @@ This repository houses the code for a submission titled: "Parallelized Clique-In
    ```bash
    pip install -r requirements.txt
    ```
-5. Obtain licenses for MOSEK and Gurobi and install those licenses on the machine you will be running this repository on.
-6. Clone the [KaMIS project](https://github.com/KarlsruheMIS/KaMIS) and build a copy of the ReduMIS program. Place the program in the `external` folder of this repository.
-7. Unzip datasets.zip to retrieve the datasets used in the original experiments.
+5. (If you want to run Gurobi) Obtain licenses for Gurobi and install that license on the machine you will be running this repository on.
+6. (If you want to run ReduMIS) Clone the [KaMIS project](https://github.com/KarlsruheMIS/KaMIS) and build a copy of the ReduMIS program. Place the program in the `external` folder of this repository.
+7. Browse the /graphs folder to retrieve the datasets used in the original experiments.
 8. Run the benchmarking suite:
    ```bash
    python benchmark.py
@@ -102,9 +101,8 @@ The script includes optional initializers for the solvers:
 
 1. **Default initializer**: Uniform distribution.
 2. **Degree-based initializer**: Initialize values based on node degrees.
-3. **SDP-based initializer**: Initialize values based on SDP solutions.
 
-Uncomment the relevant section to use an initializer.
+Specify the relevant initializer in the solver's params.
 
 ### Example: Degree-based Initializer
 
@@ -126,15 +124,6 @@ for i in range(len(mean_vector)):
 
 solver_instance.value_initializer = lambda _: torch.normal(
     mean=torch.Tensor(mean_vector), std=solver["params"]["std"]
-)
-```
-
-### Example: SDP-based Initializer
-
-```python
-solver_instance.value_initializer = lambda _: torch.normal(
-    mean=initializations[graph["name"]]["SDP_solution"],
-    std=torch.sqrt(torch.ones((len(initializations[graph["name"]]["SDP_solution"])))) * solver["params"]["std"]
 )
 ```
 

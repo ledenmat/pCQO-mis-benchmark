@@ -7,7 +7,7 @@ import pandas
 
 from solvers.CPSAT_MIS import CPSATMIS
 from solvers.Gurobi_MIS import GurobiMIS
-from solvers.pCQO_MIS import pCQOMIS
+from solvers.pCQO_MIS import pCQOMIS_MGD
 from solvers.KaMIS import ReduMIS
 
 # Interval for saving solution checkpoints
@@ -42,7 +42,7 @@ dataset_names = sorted(dataset_names, key=lambda x: len(x["name"]))
 base_solvers = [
     {
         "name": "pCQO GNM 50-1500 Scalability",
-        "class": pCQOMIS,
+        "class": pCQOMIS_MGD,
         "params": {
             "std": 2.25,
             "adam_beta_1": 0.1,

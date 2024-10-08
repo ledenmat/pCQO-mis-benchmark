@@ -1,6 +1,5 @@
 matplotlib==3.8.0
 matplotlib-inline==0.1.6
-Mosek==10.1.27
 networkx==3.1
 numpy==1.26.1
 pandas==2.2.0
