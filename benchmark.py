@@ -14,19 +14,17 @@ from solvers.pCQO_MIS import pCQOMIS_MGD
 # from solvers.dNN_Alkhouri_MIS import DNNMIS
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename='benchmark.log', level=logging.ERROR, style="{")
+logging.basicConfig(filename='benchmark.log', level=logging.INFO, style="{")
 
 # Interval for saving solution checkpoints
-SOLUTION_SAVE_INTERVAL = 2
+SOLUTION_SAVE_INTERVAL = 1
 
 #### GRAPH IMPORT ####
 
 # List of directories containing graph data
 graph_directories = [
     ### ER 700-800 Graphs ###
-    "./graphs/er_700-800"
-    ### ER 9000-11000 Graphs ###
-    # "./graphs/er_9000_11000"
+    # "./graphs/er_700-800"
     ### GNM 300 Convergence Graphs ###
     # "./graphs/gnm_random_graph_convergence",
     ### SATLIB Graphs ###
@@ -55,24 +53,24 @@ base_solvers = [
     # {"name": "Gurobi", "class": GurobiMIS, "params": {"time_limit": 30}},
     # {"name": "CPSAT", "class": CPSATMIS, "params": {"time_limit": 30}},
     # {"name": "ReduMIS", "class": ReduMIS, "params": {"time_limit":30}},
-    {
-        "name": "pCQO_MIS ER 700-800 MGD",
-        "class": pCQOMIS_MGD,
-        "params": {
-            "learning_rate": 0.000009,
-            "momentum": 0.9,
-            "number_of_steps": 225000,
-            "gamma": 350,
-            "gamma_prime": 7,
-            "batch_size": 256,
-            "std": 2.25,
-            "threshold": 0.00,
-            "steps_per_batch": 450,
-            "output_interval": 225002,
-            "value_initializer": "degree",
-            "checkpoints": [450] + list(range(4500, 225001, 4500))
-        },
-    },
+    # {
+    #     "name": "pCQO_MIS ER 700-800 MGD",
+    #     "class": pCQOMIS_MGD,
+    #     "params": {
+    #         "learning_rate": 0.000009,
+    #         "momentum": 0.9,
+    #         "number_of_steps": 225000,
+    #         "gamma": 350,
+    #         "gamma_prime": 7,
+    #         "batch_size": 256,
+    #         "std": 2.25,
+    #         "threshold": 0.00,
+    #         "steps_per_batch": 450,
+    #         "output_interval": 225002,
+    #         "value_initializer": "degree",
+    #         "checkpoints": [450] + list(range(4500, 225001, 4500))
+    #     },
+    # },
     # Uncomment and configure the following solver for SATLIB datasets if needed
     # {
     #     "name": "pCQO_MIS SATLIB MGD",
@@ -100,26 +98,25 @@ solvers = base_solvers
 
 ## Grid Search (Commented Out)
 # Uncomment and configure the following section for hyperparameter tuning
-# solvers = []
-# for solver in base_solvers:
-#     for learning_rate in [0.0003]:
-#         for momentum in [0.875]:
-#             for steps_per_batch in [30]:
-#                 for gamma_gamma_prime in [(900, 1)]:
-#                     for batch_size in [256]:
-#                         for terms in ["three"]:
-#                             modified_solver = deepcopy(solver)
-#                             modified_solver["name"] = (
-#                                 f"{modified_solver['name']} batch_size={batch_size}, learning_rate={learning_rate}, momentum={momentum}, steps_per_batch={steps_per_batch}, gamma={gamma_gamma_prime[0]}, gamma_prime={gamma_gamma_prime[1]},  terms={terms}"
-#                             )
-#                             modified_solver["params"]["learning_rate"] = learning_rate
-#                             modified_solver["params"]["momentum"] = momentum
-#                             modified_solver["params"]["steps_per_batch"] = steps_per_batch
-#                             modified_solver["params"]["gamma"] = gamma_gamma_prime[0]
-#                             modified_solver["params"]["gamma_prime"] = gamma_gamma_prime[1]
-#                             modified_solver["params"]["number_of_terms"] = terms
-#                             modified_solver["params"]["batch_size"] = batch_size
-#                             solvers.append(modified_solver)
+solvers = []
+for solver in base_solvers:
+    for learning_rate in [0.001]:
+        for momentum in [0.5]:
+            for gamma_gamma_prime in [(500, 1),]:
+                for batch_size in [256]:
+                    for terms in ["three"]:
+                        modified_solver = deepcopy(solver)
+                        modified_solver["name"] = (
+                            f"{modified_solver['name']} batch_size={batch_size}, learning_rate={learning_rate}, momentum={momentum}, gamma={gamma_gamma_prime[0]}, gamma_prime={gamma_gamma_prime[1]},  terms={terms}"
+                        )
+                        modified_solver["params"]["learning_rate"] = learning_rate
+                        modified_solver["params"]["momentum"] = momentum
+                        modified_solver["params"]["gamma"] = gamma_gamma_prime[0]
+                        modified_solver["params"]["gamma_prime"] = gamma_gamma_prime[1]
+                        modified_solver["params"]["number_of_terms"] = terms
+                        modified_solver["params"]["batch_size"] = batch_size
+                        solvers.append(modified_solver)
+
 
 
 #### SOLUTION OUTPUT FUNCTION ####

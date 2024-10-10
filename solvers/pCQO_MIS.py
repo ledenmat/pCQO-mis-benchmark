@@ -191,7 +191,8 @@ class pCQOMIS_MGD(Solver):
 
                 ### Value Initializer Code
         if self.value_initializer == "random":
-            self.value_initializer = torch.nn.init.uniform_
+            mean_vector =[]
+            self.value_initializer = lambda _, output_tensor: output_tensor.random_(0, 1)
         elif self.value_initializer == "degree":
             mean_vector = []
             degrees = dict(self.graph.degree())
@@ -212,9 +213,9 @@ class pCQOMIS_MGD(Solver):
 
             track_this = mean_vector
 
-        self.value_initializer = lambda mean, test: torch.normal(
-            out=test, mean=mean, std=self.value_initializer_std
-        )
+            self.value_initializer = lambda mean, output_tensor: torch.normal(
+                out=output_tensor, mean=mean, std=self.value_initializer_std
+            )
         ### End Value Initializer Code
 
         if self.test_runtime:
@@ -258,7 +259,7 @@ class pCQOMIS_MGD(Solver):
         for batch in range(self.batch_size):
             self.value_initializer(
                 mean_vector,
-                Matrix_X.data[batch, :]
+                Matrix_X[batch, :]
             )
 
         if self.test_runtime:
@@ -281,7 +282,6 @@ class pCQOMIS_MGD(Solver):
             solution_path = []
             solution_times = []
 
-        output_tensors = []
         steps_to_best_MIS = 0
 
         if self.number_of_terms == "three":
@@ -350,7 +350,6 @@ class pCQOMIS_MGD(Solver):
 
             if (iteration_t + 1) % self.steps_per_batch == 0:
                 masks = Matrix_X.bool().to(torch.float16)
-                output_tensors.append(masks)
                 n = self.graph_order
 
                 masks = masks.to(device)
@@ -401,13 +400,13 @@ class pCQOMIS_MGD(Solver):
                     for batch in range(self.batch_size):
                         self.value_initializer(
                             track_this,
-                            Matrix_X.data[batch, :]
+                            Matrix_X[batch, :]
                         )
                 else: 
                     for batch in range(self.batch_size):
                         self.value_initializer(
                             mean_vector,
-                            Matrix_X.data[batch, :]
+                            Matrix_X[batch, :]
                         )
 
                 if self.test_runtime:
@@ -444,3 +443,4 @@ class pCQOMIS_MGD(Solver):
         self.solution["size"] = best_MIS
         self.solution["number_of_steps"] = number_of_iterations_T
         self.solution["steps_to_best_MIS"] = steps_to_best_MIS
+        self.solution["initializations_solved"] = initializations_solved
