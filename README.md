@@ -1,7 +1,7 @@
 # pCQO-MIS v1 #
 
 ## Description ##
-This repository houses the code for a submission titled: "Parallelized Clique-Inspired Differentiable Quadratic Optimization For the Maximum Independent Set Problem" (pCQO-MIS). The goal of this repository is to provide tools and implementations for the experiments performed in the submission.
+This repository houses the code for (pCQO-MIS) method. The goal of this repository is to provide tools and implementations for the experiments performed in the submission.
 
 - [pCQO-MIS v1](#pcqo-mis-v1)
   - [Description](#description)
