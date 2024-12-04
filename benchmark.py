@@ -11,7 +11,7 @@ from solvers.pCQO_MIS import pCQOMIS_MGD
 # from solvers.CPSAT_MIS import CPSATMIS
 # from solvers.Gurobi_MIS import GurobiMIS
 # from solvers.KaMIS import ReduMIS
-# from solvers.dNN_Alkhouri_MIS import DNNMIS
+# from solvers.previous_work_MIS_dNNs import DNNMIS
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename='benchmark.log', level=logging.INFO, style="{")
