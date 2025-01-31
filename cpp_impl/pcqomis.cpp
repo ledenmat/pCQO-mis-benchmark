@@ -24,33 +24,6 @@
 // #define BATCH_SIZE 256
 // #define STD 2.25
 
-// #define LEARNING_RATE 0.01
-// #define MOMENTUM 0.55
-// #define NUM_ITERATIONS 6000
-// #define NUM_ITERATIONS_PER_BATCH 300
-// #define GAMMA 100
-// #define GAMMA_PRIME 5
-// #define BATCH_SIZE 2048
-// #define STD 1
-
-// #define LEARNING_RATE 0.009
-// #define MOMENTUM 0.55
-// #define NUM_ITERATIONS 40000
-// #define NUM_ITERATIONS_PER_BATCH 1000
-// #define GAMMA 100
-// #define GAMMA_PRIME 10
-// #define BATCH_SIZE 2048
-// #define STD 1
-
-#define LEARNING_RATE 0.01
-#define MOMENTUM 0.3
-#define NUM_ITERATIONS 40000
-#define NUM_ITERATIONS_PER_BATCH 500
-#define GAMMA 500
-#define GAMMA_PRIME 1
-#define BATCH_SIZE 256
-#define STD 2.25
-
 torch::TensorOptions default_tensor_options = torch::TensorOptions().dtype(torch::kFloat16);
 torch::TensorOptions default_tensor_options_gpu = default_tensor_options.device(torch::kCUDA);
 
@@ -279,7 +252,7 @@ int main(int argc, const char *argv[])
                     std::cout << max << std::endl;
                     std::cout << elapsed_seconds.count() << std::endl;
                 }
-                X = sampler.sample(X);
+                X = sampler.sample_previous(X);
             }
         }
         // std::cout << "Max: " << max << std::endl;
