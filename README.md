@@ -5,6 +5,7 @@ This repository houses the code for (pCQO-MIS) method. The goal of this reposito
 
 - [pCQO-MIS v1](#pcqo-mis-v1)
   - [Description](#description)
+  - [pCQO-MIS C++ Benchmark Setup](#pcqo-mis-c-benchmark-setup)
   - [Prerequisites](#prerequisites)
   - [Setup and Installation](#setup-and-installation)
   - [Configuration](#configuration)
@@ -18,6 +19,14 @@ This repository houses the code for (pCQO-MIS) method. The goal of this reposito
   - [Output](#output)
   - [Notes](#notes)
 
+## pCQO-MIS C++ Benchmark Setup
+
+1. Install [LibTorch](https://pytorch.org/get-started/locally/).
+2. Clone the repository and navigate to the ./cpp_impl/build directory.
+3. Run the following cmake command `cmake -DCMAKE_PREFIX_PATH={path to libtorch} ..`
+4. Run `cmake --build . --config Release` to build the program.
+5. Execute the program: `./pcqomis ./path/to/directory/with/graphs > results.txt` (make sure that the graphs you test are in DIMACS text format!)
+6. *Optional*: Analyze the results of the solver using ./cpp_impl/output.py
 
 ## Prerequisites
 
