@@ -146,3 +146,4 @@ The script outputs a CSV file containing the results for each graph and solver, 
 - Adjust the `SOLUTION_SAVE_INTERVAL` as needed to control the frequency of checkpoint saves.
 - The benchmarking process may be time-consuming depending on the number and size of graphs, and the solvers used.
 - Large datasets that exceed local RAM can be run using the ```benchmark_large_graphs.py``` script.
+- Basic byper-parameters fine-tuning for new graphs: For any new graph, here, we provide a basic hyper-parmeter search procedure that assist in setting up $T$ and $\alpha$. See notebook ```pCQO_MIS_param_tuning_for_feasible_solutions_v01.ipynb``` for details and an example. 
