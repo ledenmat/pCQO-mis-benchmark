@@ -27,4 +27,5 @@ _deps
 CMakeUserPresets.json
 .vscode
 detect*
-pcqomis
+pcqo_mis
+benchmark.log

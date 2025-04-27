@@ -28,58 +28,39 @@
 // Declare settings as global variables
 // Read in the first argument as the file path
 std::string FILE_PATH;
-float LEARNING_RATE = 0.0001;
-float MOMENTUM = 0.9;
-int NUM_ITERATIONS = 1000;
-int NUM_ITERATIONS_PER_BATCH = 1000;
-int GAMMA = 1000;
-int GAMMA_PRIME = 1;
-int BATCH_SIZE = 256;
-float STD = 2.25;
+float LEARNING_RATE;
+float MOMENTUM;
+int NUM_ITERATIONS;
+int NUM_ITERATIONS_PER_BATCH;
+int GAMMA;
+int GAMMA_PRIME;
+int BATCH_SIZE;
+float STD;
+int OUTPUT_INTERVAL;
 std::string INITIALIZATION_VECTOR;
 
 // Function to parse user input and set the global variables
 void parse_user_input(int argc, const char *argv[])
 {
-    if (argc > 1)
-    {
-        FILE_PATH = argv[1];
-    }
-    if (argc > 2)
-    {
-        LEARNING_RATE = std::stof(argv[2]);
-    }
-    if (argc > 3)
-    {
-        MOMENTUM = std::stof(argv[3]);
-    }
-    if (argc > 4)
-    {
-        NUM_ITERATIONS = std::stoi(argv[4]);
-    }
-    if (argc > 5)
-    {
-        NUM_ITERATIONS_PER_BATCH = std::stoi(argv[5]);
-    }
-    if (argc > 6)
-    {
-        GAMMA = std::stoi(argv[6]);
-    }
-    if (argc > 7)
-    {
-        GAMMA_PRIME = std::stoi(argv[7]);
-    }
-    if (argc > 8)
-    {
-        BATCH_SIZE = std::stoi(argv[8]);
-    }
-    if (argc > 9)
-    {
-        STD = std::stof(argv[9]);
-    }
     if (argc > 10)
     {
-        INITIALIZATION_VECTOR = argv[10];
+        FILE_PATH = argv[1];
+        LEARNING_RATE = std::stof(argv[2]);
+        MOMENTUM = std::stof(argv[3]);
+        NUM_ITERATIONS = std::stoi(argv[4]);
+        NUM_ITERATIONS_PER_BATCH = std::stoi(argv[5]);
+        GAMMA = std::stoi(argv[6]);
+        GAMMA_PRIME = std::stoi(argv[7]);
+        BATCH_SIZE = std::stoi(argv[8]);
+        STD = std::stof(argv[9]);
+        OUTPUT_INTERVAL = std::stoi(argv[10]);
+    } else {
+        std::cerr << "Usage: " << argv[0] << " <file_path> <learning_rate> <momentum> <num_iterations> <num_iterations_per_batch> <gamma> <gamma_prime> <batch_size> <std> <output_interval>" << std::endl;
+        exit(1);
+    }
+    if (argc > 11)
+    {
+        INITIALIZATION_VECTOR = argv[11];
     }
 }
 
@@ -225,15 +206,18 @@ int main(int argc, const char *argv[])
     torch::Tensor mean_vector;
     if (!INITIALIZATION_VECTOR.empty())
     {
-        if (INITIALIZATION_VECTOR.size() != number_of_nodes)
+        std::istringstream iss(INITIALIZATION_VECTOR);
+        std::vector<float> mean_vector_data;
+        std::string value;
+
+        while (std::getline(iss, value, ' '))
         {
-            throw std::runtime_error("Initialization vector size does not match the number of nodes in the graph");
+            mean_vector_data.push_back((value == "1") ? 1.0f : 0.0f);
         }
 
-        std::vector<float> mean_vector_data(number_of_nodes);
-        for (size_t i = 0; i < number_of_nodes; ++i)
+        if (mean_vector_data.size() != number_of_nodes)
         {
-            mean_vector_data[i] = (INITIALIZATION_VECTOR[i] == '1') ? 1.0f : 0.0f;
+            throw std::runtime_error("Initialization vector size does not match the number of nodes in the graph");
         }
 
         mean_vector = torch::from_blob(mean_vector_data.data(), {number_of_nodes}, default_tensor_options).clone();
@@ -261,6 +245,7 @@ int main(int argc, const char *argv[])
     Optimizer optimizer = Optimizer(LEARNING_RATE, MOMENTUM, GAMMA, GAMMA_PRIME, number_of_nodes);
 
     int max = 0;
+    torch::Tensor max_vector;
     //std::cout << "Starting optimization" << std::endl;
 
     torch::Tensor ones_vector = torch::ones({number_of_nodes}, default_tensor_options_gpu);
@@ -291,20 +276,31 @@ int main(int argc, const char *argv[])
                         if (masks[i].sum().item<float>() > max)
                         {
                             max = masks[i].sum().item<float>();
+                            max_vector = masks[i].clone();
                         }
                     }
                 // }
             }
 
-            if (iteration + 1 == NUM_ITERATIONS_PER_BATCH || ((iteration + 1) / NUM_ITERATIONS_PER_BATCH) % 10 == 0)
+            if (iteration + 1 == NUM_ITERATIONS_PER_BATCH || ((iteration + 1) / NUM_ITERATIONS_PER_BATCH) % OUTPUT_INTERVAL == 0 || iteration + 1 == NUM_ITERATIONS)
             {
                 auto end = std::chrono::high_resolution_clock::now();
                 std::chrono::duration<double> elapsed_seconds = end - start;
                 std::cout << (iteration + 1) / NUM_ITERATIONS_PER_BATCH << std::endl;
                 std::cout << max << std::endl;
                 std::cout << elapsed_seconds.count() << std::endl;
+
             }
-            X = sampler.sample_previous(X);
+            if (iteration + 1 != NUM_ITERATIONS)
+            {
+                X = sampler.sample_previous(X);
+            } else {
+                // Print the max vector on one line
+                for (int i = 0; i < max_vector.sizes()[0]; i++)
+                {
+                    std::cout << max_vector[i].item<float>() << (i == max_vector.sizes()[0] - 1 ? "\n" : " ");
+                }
+            }
         }
     }
 }

@@ -10,10 +10,11 @@ import tqdm
 # from solvers.CPSAT_MIS import CPSATMIS
 # from solvers.Gurobi_MIS import GurobiMIS
 from solvers.pCQO_MIS import pCQOMIS_MGD
+
 # from solvers.KaMIS import ReduMIS
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename='benchmark.log', level=logging.INFO, style="{")
+logging.basicConfig(filename="benchmark.log", level=logging.INFO, style="{")
 
 # Interval for saving solution checkpoints
 SOLUTION_SAVE_INTERVAL = 1
@@ -21,12 +22,13 @@ SOLUTION_SAVE_INTERVAL = 1
 #### GRAPH IMPORT ####
 
 # List of directories containing graph data
-graph_directories = ["./graphs/gnm_random_graph_scalability/gnm_2000_999500",
-                    # "./graphs/gnm_random_graph_scalability/gnm_1500_562125",
-                    # "./graphs/gnm_random_graph_scalability/gnm_1000_249750",
-                    # "./graphs/gnm_random_graph_scalability/gnm_500_62375",
-                    # "./graphs/gnm_random_graph_scalability/gnm_50_613"
-                    ]
+graph_directories = [
+    "./graphs/gnm_random_graph_scalability/gnm_2000_999500",
+    # "./graphs/gnm_random_graph_scalability/gnm_1500_562125",
+    # "./graphs/gnm_random_graph_scalability/gnm_1000_249750",
+    # "./graphs/gnm_random_graph_scalability/gnm_500_62375",
+    # "./graphs/gnm_random_graph_scalability/gnm_50_613"
+]
 
 # Initialize dataset and names lists
 dataset = {}
@@ -56,15 +58,13 @@ base_solvers = [
         "params": {
             "learning_rate": 0.01,
             "momentum": 0.55,
-            "number_of_steps": 10000,
+            "number_of_total_steps": 10000,
+            "number_of_steps_per_batch": 200,
             "gamma": 100,
             "gamma_prime": 10,
             "batch_size": 2048,
-            "std": 1,
-            "threshold": 0.00,
-            "steps_per_batch": 200,
-            "output_interval": 1000,
-            "value_initializer": "degree",
+            "sampling_stddev": 1,
+            "output_interval": 5,
         },
     },
     # {
@@ -73,15 +73,13 @@ base_solvers = [
     #     "params": {
     #         "learning_rate": 0.009,
     #         "momentum": 0.55,
-    #         "number_of_steps": 10000,
+    #         "number_of_total_steps": 10000,
+    #         "number_of_steps_per_batch": 200,
     #         "gamma": 100,
     #         "gamma_prime": 10,
     #         "batch_size": 2048,
-    #         "std": 1,
-    #         "threshold": 0.00,
-    #         "steps_per_batch": 200,
-    #         "output_interval": 1000,
-    #         "value_initializer": "degree",
+    #         "sampling_stddev": 1,
+    #         "output_interval": 5,
     #     },
     # },
     # {
@@ -90,15 +88,13 @@ base_solvers = [
     #     "params": {
     #         "learning_rate": 0.01,
     #         "momentum": 0.55,
-    #         "number_of_steps": 10000,
+    #         "number_of_total_steps": 10000,
+    #         "number_of_steps_per_batch": 200,
     #         "gamma": 100,
     #         "gamma_prime": 5,
     #         "batch_size": 2048,
-    #         "std": 1,
-    #         "threshold": 0.00,
-    #         "steps_per_batch": 200,
-    #         "output_interval": 1000,
-    #         "value_initializer": "degree",
+    #         "sampling_stddev": 1,
+    #         "output_interval": 5,
     #     },
     # },
     # {"name": "Gurobi", "class": GurobiMIS, "params": {}},
@@ -128,6 +124,7 @@ solvers = base_solvers
 #                     modified_solver["params"]["gamma_prime"] = gamma_gamma_prime[1]
 #                     solvers.append(modified_solver)
 
+
 #### SOLUTION OUTPUT FUNCTION ####
 def table_output(solutions, datasets, current_stage, total_stages):
     """
@@ -153,11 +150,20 @@ def table_output(solutions, datasets, current_stage, total_stages):
     for dataset_solutions in datasets_solutions:
         if dataset_solutions:
             table_row = [dataset_solutions[0]["dataset_name"]]
-            column_headings = [solution["solution_method"] for solution in dataset_solutions]
+            column_headings = [
+                solution["solution_method"] for solution in dataset_solutions
+            ]
 
             # Collect sizes and times for each solution
-            table_row.extend([solution["data"]["size"] for solution in dataset_solutions])
-            table_row.extend([solution['data']['initializations_solved'] for solution in dataset_solutions])
+            table_row.extend(
+                [solution["data"]["size"] for solution in dataset_solutions]
+            )
+            table_row.extend(
+                [
+                    solution["data"]["initializations_solved"]
+                    for solution in dataset_solutions
+                ]
+            )
             table_row.extend([solution["time_taken"] for solution in dataset_solutions])
 
             table_data.append(table_row)
@@ -166,12 +172,17 @@ def table_output(solutions, datasets, current_stage, total_stages):
     table_headers = ["Dataset Name"]
     table_headers.extend([heading + " Solution Size" for heading in column_headings])
     # Uncomment to include headers for steps to solution size if available
-    table_headers.extend([heading + " # initializations_solved" for heading in column_headings])
+    table_headers.extend(
+        [heading + " # initializations_solved" for heading in column_headings]
+    )
     table_headers.extend([heading + " Solution Time" for heading in column_headings])
 
     # Save the data to a CSV file
     table = pandas.DataFrame(table_data, columns=table_headers)
-    table.to_csv(f"zero_to_stage_{current_stage}_of_{total_stages}_total_stages_{datetime.now()}.csv")
+    table.to_csv(
+        f"zero_to_stage_{current_stage}_of_{total_stages}_total_stages_{datetime.now()}.csv"
+    )
+
 
 #### BENCHMARKING CODE ####
 solutions = []
@@ -181,7 +192,9 @@ stage = 0
 stages = len(solvers) * len(graph_list)
 
 # Iterate over each graph file
-for graph_filename in tqdm.tqdm(graph_list, desc=" Iterating Through Graphs", position=0):
+for graph_filename in tqdm.tqdm(
+    graph_list, desc=" Iterating Through Graphs", position=0
+):
     print(f"Graph {graph_filename} is being imported...")
     with open(graph_filename, "rb") as f:
         G = pickle.load(f)
@@ -191,7 +204,9 @@ for graph_filename in tqdm.tqdm(graph_list, desc=" Iterating Through Graphs", po
         }
 
     # Iterate over each solver
-    for index, solver in enumerate(tqdm.tqdm(solvers,desc=" Iterating Solvers for Each Graph")):
+    for index, solver in enumerate(
+        tqdm.tqdm(solvers, desc=" Iterating Solvers for Each Graph")
+    ):
         solver_instance = solver["class"](dataset["graph"], solver["params"])
 
         # Solve the problem using the current solver
@@ -202,7 +217,12 @@ for graph_filename in tqdm.tqdm(graph_list, desc=" Iterating Through Graphs", po
             "data": deepcopy(solver_instance.solution),
             "time_taken": deepcopy(solver_instance.solution_time),
         }
-        logging.info("CSV: %s, %s, %s", dataset['name'], solution['data']['size'], solution['time_taken'])
+        logging.info(
+            "CSV: %s, %s, %s",
+            dataset["name"],
+            solution["data"]["size"],
+            solution["time_taken"],
+        )
         solutions.append(solution)
         del solver_instance
 
