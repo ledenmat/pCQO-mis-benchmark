@@ -9,7 +9,7 @@ import tqdm
 from lib.dataset_generation import assemble_dataset_from_gpickle
 from solvers.pCQO_MIS import pCQOMIS_MGD
 
-# from solvers.CPSAT_MIS import CPSATMIS
+from solvers.CPSAT_MIS import CPSATMIS
 # from solvers.Gurobi_MIS import GurobiMIS
 # from solvers.KaMIS import ReduMIS
 # from solvers.previous_work_MIS_dNNs import DNNMIS
@@ -175,6 +175,19 @@ stages = len(solvers) * len(dataset)
 # Iterate over each graph in the dataset
 for graph in tqdm.tqdm(dataset, desc=" Iterating Through Graphs", position=0):
     for solver in tqdm.tqdm(solvers, desc=" Iterating Solvers for Each Graph"):
+        # To test localsearch, uncomment the following lines
+        # initial_solver = CPSATMIS(graph["data"], {"time_limit": 5})
+        # initial_solver.solve()
+
+        # # convert graph mask to int
+        # graph_mask = initial_solver.solution["graph_mask"].copy().astype(int)
+        # # convert graph_mask to string with a space between each entry
+        # graph_mask_str = " ".join(map(str, graph_mask))
+        # print("Solutions found by CPSAT solver: ", initial_solver.solution["size"])
+
+        # solver["params"]["initialization_vector"] = graph_mask_str
+
+
         solver_instance = solver["class"](graph["data"], solver["params"])
 
         # Solve the problem using the current solver
