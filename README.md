@@ -141,7 +141,7 @@ solver_instance.value_initializer = lambda _: torch.normal(
 
 The script outputs a CSV file containing the results for each graph and solver, including solution sizes and time taken for each solver.
 
-## Basic byper-parameters fine-tuning for new graphs: 
+## Basic hyper-parameters fine-tuning: 
 For any new graph, we provide a basic hyper-parmeter search procedure that assist in setting up $T$ and $\alpha$. See notebook ```pCQO_MIS_param_tuning_for_feasible_solutions_v01.ipynb``` for details and an example. 
 
 ## Notes
