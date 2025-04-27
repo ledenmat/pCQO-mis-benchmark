@@ -26,7 +26,7 @@ This repository contains the code for the (pCQO-MIS) method. The goal is to prov
 ### Application Setup
 
 1. Install [LibTorch](https://pytorch.org/get-started/locally/).
-2. Clone the repository and navigate to the `./cpp_impl/build` directory.
+2. Clone the repository and navigate to the `./cpp_impl` directory.
 3. Run the following CMake command:  
    ```bash
    cmake -DCMAKE_PREFIX_PATH={path to libtorch} ..
