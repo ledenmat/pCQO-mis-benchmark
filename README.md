@@ -1,47 +1,103 @@
 # pCQO-MIS v1 #
 
-## Description ##
-This repository houses the code for (pCQO-MIS) method. The goal of this repository is to provide tools and implementations for the experiments performed in the submission.
+## Description
+
+This repository contains the code for the (pCQO-MIS) method. The goal is to provide tools and implementations for the experiments conducted in the submission.
 
 - [pCQO-MIS v1](#pcqo-mis-v1)
   - [Description](#description)
-  - [pCQO-MIS C++ Benchmark Setup](#pcqo-mis-c-benchmark-setup)
-  - [Prerequisites](#prerequisites)
-  - [Setup and Installation](#setup-and-installation)
-  - [Configuration](#configuration)
-    - [Graph Import](#graph-import)
-    - [Solver Configuration](#solver-configuration)
-  - [Running the Script](#running-the-script)
-    - [Checkpoints and Final Results](#checkpoints-and-final-results)
-  - [Customization](#customization)
-    - [Initializers](#initializers)
-    - [Example: Degree-based Initializer](#example-degree-based-initializer)
-  - [Output](#output)
-  - [Basic Tuning Procedure](#tuning)
+  - [pCQO-MIS](#pcqo-mis)
+    - [Application Setup](#application-setup)
+    - [Running the Application](#running-the-application)
+  - [Benchmark Setup](#benchmark-setup)
+    - [Prerequisites](#prerequisites)
+    - [Setup and Installation](#setup-and-installation)
+    - [Configuration](#configuration)
+      - [Graph Import](#graph-import)
+      - [Solver Configuration](#solver-configuration)
+    - [Running the Script](#running-the-script)
+      - [Checkpoints and Final Results](#checkpoints-and-final-results)
+    - [Output](#output)
+  - [Basic Hyper-Parameters Fine-Tuning](#basic-hyper-parameters-fine-tuning)
   - [Notes](#notes)
 
-## pCQO-MIS C++ Benchmark Setup
+## pCQO-MIS
+
+### Application Setup
 
 1. Install [LibTorch](https://pytorch.org/get-started/locally/).
-2. Clone the repository and navigate to the ./cpp_impl/build directory.
-3. Run the following cmake command `cmake -DCMAKE_PREFIX_PATH={path to libtorch} ..`
-4. Run `cmake --build . --config Release` to build the program.
-5. Execute the program: `./pcqomis ./path/to/directory/with/graphs > results.txt` (make sure that the graphs you test are in DIMACS text format!)
-6. *Optional*: Analyze the results of the solver using ./cpp_impl/output.py
+2. Clone the repository and navigate to the `./cpp_impl/build` directory.
+3. Run the following CMake command:  
+   ```bash
+   cmake -DCMAKE_PREFIX_PATH={path to libtorch} ..
+   ```
+4. Build the program using:  
+   ```bash
+   cmake --build . --config Release
+   ```
+   The executable `pcqo_mis` will be available in the `./external` directory.
 
-## Prerequisites
+### Running the Application
+
+To run the `pcqo_mis` application, follow these steps:
+
+1. **Build the Application**  
+   Ensure the application is built as described in the [Application Setup](#application-setup) section. The executable `pcqo_mis` should be available in the `./external` directory.
+
+2. **Prepare Input Data**  
+   The application requires a graph file in DIMACS format as input. Ensure the graph file is accessible and correctly formatted.
+
+3. **Run the Application**  
+   Use the following command to execute the application:
+
+   ```bash
+   ./external/pcqo_mis <file_path> <learning_rate> <momentum> <num_iterations> <num_iterations_per_batch> <gamma> <gamma_prime> <batch_size> <std> <output_interval> [initialization_vector]
+   ```
+
+   Replace the placeholders with appropriate values (refer to [Basic Hyper-Parameters Fine-Tuning](#basic-hyper-parameters-fine-tuning) for guidance):
+   - `<file_path>`: Path to the DIMACS graph file.
+   - `<learning_rate>`: Learning rate for the optimizer.
+   - `<momentum>`: Momentum for the optimizer.
+   - `<num_iterations>`: Total number of iterations.
+   - `<num_iterations_per_batch>`: Number of iterations per batch.
+   - `<gamma>`: Weight for adjacency matrix in gradient computation.
+   - `<gamma_prime>`: Weight for complement adjacency matrix in gradient computation.
+   - `<batch_size>`: Number of samples in each batch.
+   - `<std>`: Standard deviation for initialization sampling.
+   - `<output_interval>`: Interval for printing intermediate results.
+   - `[initialization_vector]` (optional): Space-separated binary vector for initialization.
+
+4. **Example Command**  
+   For example, to run the application with a graph file `graph.dimacs` and specific parameters:
+
+   ```bash
+   ./external/pcqo_mis graph.dimacs 0.0003 0.875 7500 30 900 1 256 2.25 10
+   ```
+
+5. **Output**  
+   - The application prints intermediate results at intervals specified by `<output_interval>`.
+   - At the end of execution, the maximum independent set found is printed as a binary vector.
+
+6. **Notes**  
+   - Ensure the graph file is correctly formatted and accessible.
+   - Adjust parameters as needed for different graph sizes or optimization requirements.
+
+## Benchmark Setup
+
+### Prerequisites
 
 - Python 3.10
+- [pCQO-MIS Setup](#application-setup)
 - Required libraries: `pandas`, `torch`, `gurobipy`, `ortools`
 
-## Setup and Installation
+### Setup and Installation
 
 1. Clone the repository and navigate to the repository's root directory.
-2. Create a virtual environment using venv
+2. Create a virtual environment using `venv`:
    ```bash
    python3 -m venv .venv
    ```
-3. Activate your environment
+3. Activate the virtual environment:
    ```bash
    source .venv/bin/activate
    ```
@@ -49,20 +105,19 @@ This repository houses the code for (pCQO-MIS) method. The goal of this reposito
    ```bash
    pip install -r requirements.txt
    ```
-5. (If you want to run Gurobi) Obtain licenses for Gurobi and install that license on the machine you will be running this repository on.
-6. (If you want to run ReduMIS) Clone the [KaMIS project](https://github.com/KarlsruheMIS/KaMIS) and build a copy of the ReduMIS program. Place the program in the `external` folder of this repository.
-7. Browse the /graphs folder to retrieve the datasets used in the original experiments.
+5. (Optional) If using Gurobi, obtain a license and install it on the machine.
+6. (Optional) If using ReduMIS, clone the [KaMIS project](https://github.com/KarlsruheMIS/KaMIS), build the ReduMIS program, and place it in the `external` folder.
+7. Retrieve datasets from the `/graphs` folder used in the original experiments.
 8. Run the benchmarking suite:
    ```bash
    python benchmark.py
    ```
 
+### Configuration
 
-## Configuration
+#### Graph Import
 
-### Graph Import
-
-Specify the directories containing the graph data by uncommenting the appropriate lines in the `graph_directories` list within `benchmark.py`. For example:
+Specify the directories containing the graph data by editing the `graph_directories` list in `benchmark.py`. For example:
 
 ```python
 graph_directories = [
@@ -72,9 +127,9 @@ graph_directories = [
 ]
 ```
 
-### Solver Configuration
+#### Solver Configuration
 
-Define the solvers you want to use in the `solvers` list. Uncomment the solvers you want to benchmark and specify their parameters. For example:
+Define the solvers to use in the `solvers` list. Uncomment the solvers and specify their parameters. For example:
 
 ```python
 solvers = [
@@ -91,7 +146,7 @@ solvers = [
 ]
 ```
 
-## Running the Script
+### Running the Script
 
 Run the script to start the benchmarking process:
 
@@ -99,56 +154,22 @@ Run the script to start the benchmarking process:
 python benchmark.py
 ```
 
-### Checkpoints and Final Results
+#### Checkpoints and Final Results
 
-The script saves intermediate results at regular intervals defined by `SOLUTION_SAVE_INTERVAL`. The final results are saved at the end of the benchmarking process. Output files are saved as CSV files named `zero_to_stage_{current_stage}_of_{total_stages}_total_stages.csv`.
+Intermediate results are saved at intervals defined by `SOLUTION_SAVE_INTERVAL`. Final results are saved as CSV files named `zero_to_stage_{current_stage}_of_{total_stages}_total_stages.csv`.
 
-## Customization
+### Output
 
-### Initializers
+The script generates a CSV file containing results for each graph and solver, including solution sizes and time taken.
 
-The script includes optional initializers for the solvers:
+## Basic Hyper-Parameters Fine-Tuning
 
-1. **Default initializer**: Uniform distribution.
-2. **Degree-based initializer**: Initialize values based on node degrees.
-
-Specify the relevant initializer in the solver's params.
-
-### Example: Degree-based Initializer
-
-```python
-mean_vector = []
-degrees = dict(graph["data"].degree())
-
-# Find the maximum degree
-max_degree = max(degrees.values())
-
-for _, degree in graph["data"].degree():
-    degree_init = 1 - degree / max_degree
-    mean_vector.append(degree_init)
-
-min_degree_initialization = max(mean_vector)
-
-for i in range(len(mean_vector)):
-    mean_vector[i] = mean_vector[i] / min_degree_initialization
-
-solver_instance.value_initializer = lambda _: torch.normal(
-    mean=torch.Tensor(mean_vector), std=solver["params"]["std"]
-)
-```
-
-## Output
-
-The script outputs a CSV file containing the results for each graph and solver, including solution sizes and time taken for each solver.
-
-## Basic hyper-parameters fine-tuning: 
-For any new graph, we provide a basic hyper-parmeter search procedure that assist in setting up $T$ and $\alpha$. See notebook ```pCQO_MIS_param_tuning_for_feasible_solutions_v01.ipynb``` for details and an example. 
+For new graphs, a basic hyper-parameter search procedure is provided to assist in setting up $T$ and $\alpha$. Refer to the notebook `pCQO_MIS_param_tuning_for_feasible_solutions_v01.ipynb` for details and examples.
 
 ## Notes
 
-- Ensure the graph data and solver implementations are correctly set up and accessible.
-- Adjust the `SOLUTION_SAVE_INTERVAL` as needed to control the frequency of checkpoint saves.
-- The benchmarking process may be time-consuming depending on the number and size of graphs, and the solvers used.
-- Large datasets that exceed local RAM can be run using the ```benchmark_large_graphs.py``` script.
-
+- Ensure graph data and solver implementations are correctly set up and accessible.
+- Adjust `SOLUTION_SAVE_INTERVAL` to control the frequency of checkpoint saves.
+- The benchmarking process may take significant time depending on the number and size of graphs and solvers used.
+- For large datasets exceeding local RAM, use the `benchmark_large_graphs.py` script.
 
