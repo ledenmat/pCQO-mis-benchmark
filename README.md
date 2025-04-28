@@ -64,6 +64,7 @@ To run the `pcqo_mis` application, follow these steps:
    ```bash
    ./external/pcqo_mis graph.dimacs 0.0003 0.875 7500 30 900 1 256 2.25 10
    ```
+   For more information about the DIMACS format, see utils/NetworkX_to_DIMACS.ipynb
 
 5. **Output**  
    - The application prints intermediate results at intervals specified by `<output_interval>`.
