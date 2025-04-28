@@ -40,29 +40,6 @@ int OUTPUT_INTERVAL;
 std::string INITIALIZATION_VECTOR;
 
 // Function to parse user input and set the global variables
-void parse_user_input(int argc, const char *argv[])
-{
-    if (argc > 10)
-    {
-        FILE_PATH = argv[1];
-        LEARNING_RATE = std::stof(argv[2]);
-        MOMENTUM = std::stof(argv[3]);
-        NUM_ITERATIONS = std::stoi(argv[4]);
-        NUM_ITERATIONS_PER_BATCH = std::stoi(argv[5]);
-        GAMMA = std::stoi(argv[6]);
-        GAMMA_PRIME = std::stoi(argv[7]);
-        BATCH_SIZE = std::stoi(argv[8]);
-        STD = std::stof(argv[9]);
-        OUTPUT_INTERVAL = std::stoi(argv[10]);
-    } else {
-        std::cerr << "Usage: " << argv[0] << " <file_path> <learning_rate> <momentum> <num_iterations> <num_iterations_per_batch> <gamma> <gamma_prime> <batch_size> <std> <output_interval>" << std::endl;
-        exit(1);
-    }
-    if (argc > 11)
-    {
-        INITIALIZATION_VECTOR = argv[11];
-    }
-}
 
 torch::TensorOptions default_tensor_options = torch::TensorOptions().dtype(torch::kFloat16);
 torch::TensorOptions default_tensor_options_gpu = default_tensor_options.device(torch::kCUDA);
@@ -100,11 +77,11 @@ public:
     float learning_rate;
     float momentum;
     torch::Tensor velocity;
-    Optimizer(float learning_rate, float momentum, float gamma, float gamma_prime, int graph_order)
+    Optimizer(float learning_rate, float momentum, float gamma, float gamma_prime, int graph_order, int batch_size)
     {
         this->learning_rate = learning_rate;
         this->momentum = momentum;
-        this->velocity = torch::zeros({BATCH_SIZE, graph_order}, default_tensor_options_gpu);
+        this->velocity = torch::zeros({batch_size, graph_order}, default_tensor_options_gpu);
         this->gamma = gamma;
         this->gamma_prime = gamma_prime;
     }
@@ -177,36 +154,27 @@ torch::Tensor generate_complement_graph(const torch::Tensor &graph)
     return torch::ones({graph.sizes()[0], graph.sizes()[1]}, default_tensor_options_gpu) - graph - torch::eye(graph.sizes()[0], default_tensor_options_gpu);
 }
 
-int main(int argc, const char *argv[])
+std::tuple<torch::Tensor, torch::Tensor, long> load_graph(const std::string &file_path)
 {
-    int sum_max = 0;
-    int count = 0;
-
-    parse_user_input(argc, argv);
-
-    std::cout << FILE_PATH << "-" << GAMMA << "-" << LEARNING_RATE << "-" << GAMMA_PRIME << std::endl;
-
-    auto start = std::chrono::high_resolution_clock::now();
-    torch::manual_seed(113);
-
-    torch::Tensor adjacency_matrix = read_graph_from_file(FILE_PATH);
+    torch::Tensor adjacency_matrix = read_graph_from_file(file_path);
     long number_of_nodes = adjacency_matrix.sizes()[0];
-    // std::cout << "Number of nodes: " << number_of_nodes << std::endl;
-
     torch::Tensor adjacency_matrix_comp = generate_complement_graph(adjacency_matrix);
+    return std::make_tuple(adjacency_matrix, adjacency_matrix_comp, number_of_nodes);
+}
 
+torch::Tensor compute_mean_vector(const torch::Tensor &adjacency_matrix, const std::string &initialization_vector, int batch_size, int number_of_nodes)
+{
     // Compute the degree of each node in the graph
     torch::Tensor degrees = adjacency_matrix.sum(0);
 
     // Compute the max degree of the graph
     float max_degree = degrees.max().item<float>();
-    // std::cout << "Max degree: " << degrees.max().item<float>() << std::endl;
 
-    // Check if the initialization directory is provided and not empty
+    // Check if the initialization vector is provided and not empty
     torch::Tensor mean_vector;
-    if (!INITIALIZATION_VECTOR.empty())
+    if (!initialization_vector.empty())
     {
-        std::istringstream iss(INITIALIZATION_VECTOR);
+        std::istringstream iss(initialization_vector);
         std::vector<float> mean_vector_data;
         std::string value;
 
@@ -221,19 +189,259 @@ int main(int argc, const char *argv[])
         }
 
         mean_vector = torch::from_blob(mean_vector_data.data(), {number_of_nodes}, default_tensor_options).clone();
-        mean_vector = mean_vector.unsqueeze(0).expand({BATCH_SIZE, -1}).to(torch::kCUDA);
+        mean_vector = mean_vector.unsqueeze(0).expand({batch_size, -1}).to(torch::kCUDA);
     }
     else
     {
-        // Create the mean vector if no initialization directory is provided
+        // Create the mean vector if no initialization vector is provided
         mean_vector = torch::zeros({number_of_nodes}, default_tensor_options);
         for (int i = 0; i < number_of_nodes; i++)
         {
             mean_vector[i] = 1.0 - (degrees[i] / (max_degree));
         }
-        mean_vector = mean_vector.unsqueeze(0).expand({BATCH_SIZE, -1}).to(torch::kCUDA);
+        mean_vector = mean_vector.unsqueeze(0).expand({batch_size, -1}).to(torch::kCUDA);
     }
 
+    return mean_vector;
+}
+
+struct Parameters
+{
+    float learning_rate;
+    float momentum;
+    int num_iterations_per_batch;
+    int gamma;
+    int gamma_prime;
+    int batch_size;
+    float std;
+};
+
+std::vector<Parameters> FindParameterRange(std::string file_path)
+{
+    std::vector<Parameters> best_params_list;
+    float best_score = 0;
+
+    // Define the ranges for the grid search
+    std::vector<float> learning_rates = {0.5, 0.05, 0.005, 0.0005, 0.0001, 0.00001, 0.00009, 0.000001, 0.0000001};
+    std::vector<float> momentums = {0.99, 0.9, 0.7};
+    std::vector<int> gammas = {250, 500, 1000};
+    std::vector<int> gamma_primes = {1, 3, 5};
+    int num_iterations_per_batch = 500;
+    int num_iterations = 1000;
+    int batch_size = 256;
+    float std = 2.25;
+
+    torch::manual_seed(113);
+    auto [adjacency_matrix, adjacency_matrix_comp, number_of_nodes] = load_graph(file_path);
+
+    torch::Tensor mean_vector = compute_mean_vector(adjacency_matrix, INITIALIZATION_VECTOR, batch_size, number_of_nodes);
+
+    InitializationSampler sampler = InitializationSampler(mean_vector, std);
+
+    // total number of iterations
+    int total_iterations = learning_rates.size() * momentums.size() * gammas.size() * gamma_primes.size();
+    int current_iteration = 0;
+
+    while (best_params_list.size() == 0)
+    {
+        for (float lr : learning_rates)
+        {
+            for (float mom : momentums)
+            {
+                for (int gamma : gammas)
+                {
+                    for (int gamma_prime : gamma_primes)
+                    {
+                        // Create initialization matrix and sample from a normal distribution with mean_vector and std
+                        torch::Tensor X = sampler.sample(torch::zeros({batch_size, number_of_nodes}, default_tensor_options_gpu));
+
+                        Optimizer optimizer = Optimizer(lr, mom, gamma, gamma_prime, number_of_nodes, batch_size);
+
+                        int max = 0;
+
+                        torch::Tensor ones_vector = torch::ones({number_of_nodes}, default_tensor_options_gpu);
+                        torch::Tensor update = number_of_nodes * adjacency_matrix - adjacency_matrix_comp;
+                        std::cout << "optimizing: " << ++current_iteration << "/" << total_iterations << std::endl;
+
+                        for (int iteration = 0; iteration < num_iterations; iteration++)
+                        {
+                            torch::Tensor gradient = optimizer.compute_gradient(adjacency_matrix, adjacency_matrix_comp, X);
+                            X = optimizer.velocity_update(X, gradient);
+
+                            // Clamp the initialization matrix to be between 0 and 1
+                            X = X.clamp(0, 1);
+
+                            if ((iteration + 1) % num_iterations_per_batch == 0)
+                            {
+                                torch::Tensor masks = X.gt(0.5).to(torch::kFloat16);
+
+                                for (int i = 0; i < masks.sizes()[0]; i++)
+                                {
+                                    torch::Tensor binarized_update = masks[i] - 0.1 * (-ones_vector + masks[i].matmul(update));
+                                    binarized_update.clamp_(0, 1);
+                                    if (torch::equal(binarized_update, masks[i]))
+                                    {
+                                        if (masks[i].sum().item<float>() > max)
+                                        {
+                                            max = masks[i].sum().item<float>();
+
+                                            // Clear the best parameters list and add the new best parameters
+                                            if (max > best_score)
+                                            {
+                                                best_score = max;
+                                                best_params_list.clear();
+                                            }
+
+                                            // Add the current parameters to the list if they match the best score
+                                            if (max == best_score)
+                                            {
+                                                best_params_list.push_back({lr, mom, num_iterations_per_batch, gamma, gamma_prime, batch_size, std});
+                                            }
+                                        }
+                                    }
+                                }
+                                X = sampler.sample_previous(X);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (best_params_list.size() == 0)
+        {
+            current_iteration = 0;
+            num_iterations_per_batch = num_iterations_per_batch * 2;
+            num_iterations = num_iterations * 2;
+            gammas.push_back(gammas[gammas.size() - 1] * 2);
+            std::cout << "No parameters found, increasing gamma and num_iterations_per_batch" << std::endl;
+            std::cout << "Increasing gamma to: " << gammas[gammas.size() - 1] << std::endl;
+            std::cout << "Increasing num_iterations_per_batch to: " << num_iterations_per_batch << std::endl;
+        }
+    }
+
+    // Return the best parameters list
+    return best_params_list;
+}
+
+void parse_user_input(int argc, const char *argv[])
+{
+    if (argc > 10)
+    {
+        FILE_PATH = argv[1];
+        LEARNING_RATE = std::stof(argv[2]);
+        MOMENTUM = std::stof(argv[3]);
+        NUM_ITERATIONS = std::stoi(argv[4]);
+        NUM_ITERATIONS_PER_BATCH = std::stoi(argv[5]);
+        GAMMA = std::stoi(argv[6]);
+        GAMMA_PRIME = std::stoi(argv[7]);
+        BATCH_SIZE = std::stoi(argv[8]);
+        STD = std::stof(argv[9]);
+        OUTPUT_INTERVAL = std::stoi(argv[10]);
+    }
+    else
+    {
+        if (argc > 1)
+        {
+            FILE_PATH = argv[1];
+            std::cout << "Not enough parameters provided, performing grid search to find appropriate parameters" << std::endl;
+
+            std::vector<Parameters> parameters = FindParameterRange(FILE_PATH);
+            if (!parameters.empty())
+            {
+                float min_learning_rate = parameters[0].learning_rate, max_learning_rate = parameters[0].learning_rate;
+                float min_momentum = parameters[0].momentum, max_momentum = parameters[0].momentum;
+                int min_gamma = parameters[0].gamma, max_gamma = parameters[0].gamma;
+                int min_gamma_prime = parameters[0].gamma_prime, max_gamma_prime = parameters[0].gamma_prime;
+                int min_batch_size = parameters[0].batch_size, max_batch_size = parameters[0].batch_size;
+                float min_std = parameters[0].std, max_std = parameters[0].std;
+                int min_num_iterations_per_batch = parameters[0].num_iterations_per_batch, max_num_iterations_per_batch = parameters[0].num_iterations_per_batch;
+
+                for (const auto &param : parameters)
+                {
+                    min_learning_rate = std::min(min_learning_rate, param.learning_rate);
+                    max_learning_rate = std::max(max_learning_rate, param.learning_rate);
+                    min_momentum = std::min(min_momentum, param.momentum);
+                    max_momentum = std::max(max_momentum, param.momentum);
+                    min_gamma = std::min(min_gamma, param.gamma);
+                    max_gamma = std::max(max_gamma, param.gamma);
+                    min_gamma_prime = std::min(min_gamma_prime, param.gamma_prime);
+                    max_gamma_prime = std::max(max_gamma_prime, param.gamma_prime);
+                    min_batch_size = std::min(min_batch_size, param.batch_size);
+                    max_batch_size = std::max(max_batch_size, param.batch_size);
+                    min_std = std::min(min_std, param.std);
+                    max_std = std::max(max_std, param.std);
+                    min_num_iterations_per_batch = std::min(min_num_iterations_per_batch, param.num_iterations_per_batch);
+                    max_num_iterations_per_batch = std::max(max_num_iterations_per_batch, param.num_iterations_per_batch);
+                }
+
+                std::cout << "Parameter ranges found:" << std::endl;
+                std::cout << "Learning rate: [" << min_learning_rate << ", " << max_learning_rate << "]" << std::endl;
+                std::cout << "Momentum: [" << min_momentum << ", " << max_momentum << "]" << std::endl;
+                std::cout << "Gamma: [" << min_gamma << ", " << max_gamma << "]" << std::endl;
+                std::cout << "Gamma prime: [" << min_gamma_prime << ", " << max_gamma_prime << "]" << std::endl;
+                std::cout << "Batch size: [" << min_batch_size << ", " << max_batch_size << "]" << std::endl;
+                std::cout << "Std: [" << min_std << ", " << max_std << "]" << std::endl;
+                std::cout << "Num iterations per batch: [" << min_num_iterations_per_batch << ", " << max_num_iterations_per_batch << "]" << std::endl;
+
+                // Pick a set of parameters in the middle of the list
+                size_t middle_index = parameters.size() / 2;
+                const auto &selected_param = parameters[middle_index];
+
+                // Set the global variables to the selected parameters
+                LEARNING_RATE = selected_param.learning_rate;
+                MOMENTUM = selected_param.momentum;
+                NUM_ITERATIONS_PER_BATCH = selected_param.num_iterations_per_batch;
+                GAMMA = selected_param.gamma;
+                GAMMA_PRIME = selected_param.gamma_prime;
+                BATCH_SIZE = selected_param.batch_size;
+                STD = selected_param.std;
+                NUM_ITERATIONS = NUM_ITERATIONS_PER_BATCH * 10;
+                OUTPUT_INTERVAL = 1;
+
+                std::cout << "Selected parameters:" << std::endl;
+                std::cout << "Learning rate: " << LEARNING_RATE << std::endl;
+                std::cout << "Momentum: " << MOMENTUM << std::endl;
+                std::cout << "Gamma: " << GAMMA << std::endl;
+                std::cout << "Gamma prime: " << GAMMA_PRIME << std::endl;
+                std::cout << "Batch size: " << BATCH_SIZE << std::endl;
+                std::cout << "Std: " << STD << std::endl;
+                std::cout << "Num iterations per batch: " << NUM_ITERATIONS_PER_BATCH << std::endl;
+                std::cout << "Num iterations: " << NUM_ITERATIONS << std::endl;
+            }
+            else
+            {
+                std::cout << "No parameters found." << std::endl;
+                exit(1);
+            }
+        }
+        else
+        {
+            std::cerr << "Usage: " << argv[0] << " <file_path> [learning_rate] [momentum] [num_iterations] [num_iterations_per_batch] [gamma] [gamma_prime] [batch_size] [std] [output_interval] [initialization_vector]" << std::endl;
+            exit(1);
+        }
+    }
+    if (argc > 11)
+    {
+        INITIALIZATION_VECTOR = argv[11];
+    }
+}
+
+int main(int argc, const char *argv[])
+{
+    int sum_max = 0;
+    int count = 0;
+
+    parse_user_input(argc, argv);
+
+    std::cout << FILE_PATH << "-" << GAMMA << "-" << LEARNING_RATE << "-" << GAMMA_PRIME << std::endl;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    torch::manual_seed(113);
+
+    auto [adjacency_matrix, adjacency_matrix_comp, number_of_nodes] = load_graph(FILE_PATH);
+
+    // compute mean vector
+    torch::Tensor mean_vector = compute_mean_vector(adjacency_matrix, INITIALIZATION_VECTOR, BATCH_SIZE, number_of_nodes);
 
     InitializationSampler sampler = InitializationSampler(mean_vector, STD);
 
@@ -242,11 +450,11 @@ int main(int argc, const char *argv[])
 
     // //std::cout << "Initialization matrix: " << X << std::endl;
 
-    Optimizer optimizer = Optimizer(LEARNING_RATE, MOMENTUM, GAMMA, GAMMA_PRIME, number_of_nodes);
+    Optimizer optimizer = Optimizer(LEARNING_RATE, MOMENTUM, GAMMA, GAMMA_PRIME, number_of_nodes, BATCH_SIZE);
 
     int max = 0;
     torch::Tensor max_vector;
-    //std::cout << "Starting optimization" << std::endl;
+    // std::cout << "Starting optimization" << std::endl;
 
     torch::Tensor ones_vector = torch::ones({number_of_nodes}, default_tensor_options_gpu);
     torch::Tensor update = number_of_nodes * adjacency_matrix - adjacency_matrix_comp;
@@ -269,16 +477,16 @@ int main(int argc, const char *argv[])
             {
                 // if (sums[i].item<float>() > 0 && masks[i].t().matmul(adjacency_matrix).matmul(masks[i]).item<float>() == 0)
                 // {
-                    torch::Tensor binarized_update = masks[i] - 0.1 * (-ones_vector + masks[i].matmul(update));
-                    binarized_update.clamp_(0, 1);
-                    if (torch::equal(binarized_update, masks[i]))
+                torch::Tensor binarized_update = masks[i] - 0.1 * (-ones_vector + masks[i].matmul(update));
+                binarized_update.clamp_(0, 1);
+                if (torch::equal(binarized_update, masks[i]))
+                {
+                    if (masks[i].sum().item<float>() > max)
                     {
-                        if (masks[i].sum().item<float>() > max)
-                        {
-                            max = masks[i].sum().item<float>();
-                            max_vector = masks[i].clone();
-                        }
+                        max = masks[i].sum().item<float>();
+                        max_vector = masks[i].clone();
                     }
+                }
                 // }
             }
 
@@ -289,12 +497,13 @@ int main(int argc, const char *argv[])
                 std::cout << (iteration + 1) / NUM_ITERATIONS_PER_BATCH << std::endl;
                 std::cout << max << std::endl;
                 std::cout << elapsed_seconds.count() << std::endl;
-
             }
             if (iteration + 1 != NUM_ITERATIONS)
             {
                 X = sampler.sample_previous(X);
-            } else {
+            }
+            else
+            {
                 // Print the max vector on one line
                 for (int i = 0; i < max_vector.sizes()[0]; i++)
                 {

@@ -1,7 +1,5 @@
 from copy import deepcopy
-import pickle
 import pandas
-import torch
 from datetime import datetime
 import logging
 import tqdm
@@ -45,7 +43,7 @@ graph_directories = [
 ]
 
 # Assemble dataset from .gpickle files in the specified directories
-dataset = assemble_dataset_from_gpickle(graph_directories, 1)
+dataset = assemble_dataset_from_gpickle(graph_directories)
 
 #### SOLVER DESCRIPTION ####
 

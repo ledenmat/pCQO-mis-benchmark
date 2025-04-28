@@ -15,6 +15,7 @@ This repository contains the code for the (pCQO-MIS) method. The goal is to prov
     - [Configuration](#configuration)
       - [Graph Import](#graph-import)
       - [Solver Configuration](#solver-configuration)
+      - [Warning](#warning)
     - [Running the Script](#running-the-script)
       - [Checkpoints and Final Results](#checkpoints-and-final-results)
     - [Output](#output)
@@ -51,21 +52,11 @@ To run the `pcqo_mis` application, follow these steps:
    Use the following command to execute the application:
 
    ```bash
-   ./external/pcqo_mis <file_path> <learning_rate> <momentum> <num_iterations> <num_iterations_per_batch> <gamma> <gamma_prime> <batch_size> <std> <output_interval> [initialization_vector]
+   ./external/pcqo_mis <file_path> [<learning_rate> <momentum> <num_iterations> <num_iterations_per_batch> <gamma> <gamma_prime> <batch_size> <std> <output_interval>] [initialization_vector]
    ```
 
-   Replace the placeholders with appropriate values (refer to [Basic Hyper-Parameters Fine-Tuning](#basic-hyper-parameters-fine-tuning) for guidance):
-   - `<file_path>`: Path to the DIMACS graph file.
-   - `<learning_rate>`: Learning rate for the optimizer.
-   - `<momentum>`: Momentum for the optimizer.
-   - `<num_iterations>`: Total number of iterations.
-   - `<num_iterations_per_batch>`: Number of iterations per batch.
-   - `<gamma>`: Weight for adjacency matrix in gradient computation.
-   - `<gamma_prime>`: Weight for complement adjacency matrix in gradient computation.
-   - `<batch_size>`: Number of samples in each batch.
-   - `<std>`: Standard deviation for initialization sampling.
-   - `<output_interval>`: Interval for printing intermediate results.
-   - `[initialization_vector]` (optional): Space-separated binary vector for initialization.
+   - `<file_path>`: Path to the DIMACS graph file (required).
+   - All other parameters are optional. If not provided, a grid search will be performed to attempt to find suitable values. **Note:** This grid search may result in suboptimal parameters that do not yield ideal results. It is strongly recommended to provide these parameters for better performance.
 
 4. **Example Command**  
    For example, to run the application with a graph file `graph.dimacs` and specific parameters:
@@ -146,6 +137,12 @@ solvers = [
 ]
 ```
 
+
+#### Warning
+
+When running the `pcqo_mis` application, ensure that all arguments are provided. If any optional arguments are omitted, the application will default to a slower grid search to determine suitable values. This grid search may result in suboptimal parameters and significantly increase runtime. Providing all arguments is strongly recommended for optimal performance.
+
+
 ### Running the Script
 
 Run the script to start the benchmarking process:
@@ -164,7 +161,7 @@ The script generates a CSV file containing results for each graph and solver, in
 
 ## Basic Hyper-Parameters Fine-Tuning
 
-For new graphs, a basic hyper-parameter search procedure is provided to assist in setting up $T$ and $\alpha$. Refer to the notebook `pCQO_MIS_param_tuning_for_feasible_solutions_v01.ipynb` for details and examples.
+For new graphs, a basic hyper-parameter search procedure is provided to assist in setting up $T$ and $\alpha$. You can use it by running `pcqo_mis` without all optional parameters. **Note:** This grid search may result in suboptimal parameters that do not yield ideal results. It is strongly recommended to determine these parameters yourself for better performance.
 
 ## Notes
 
