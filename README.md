@@ -1,4 +1,8 @@
+# Quadratic Differentiable Optimization For The Maximum Independent Set Problem
+
 # pCQO-MIS v1 #
+
+## ICML 2025
 
 ## Description
 
