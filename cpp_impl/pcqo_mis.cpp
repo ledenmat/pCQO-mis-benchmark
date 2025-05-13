@@ -58,13 +58,13 @@ public:
     }
     torch::Tensor sample(torch::Tensor matrix)
     {
-        torch::Tensor sample = torch::normal_out(matrix, mean_vector, STD, std::nullopt);
+        torch::Tensor sample = torch::normal_out(matrix, mean_vector, stdev, std::nullopt);
         return sample;
     }
     torch::Tensor sample_previous(torch::Tensor matrix)
     {
         mean_vector = matrix.clone();
-        torch::Tensor sample = torch::normal_out(matrix, mean_vector, STD, std::nullopt);
+        torch::Tensor sample = torch::normal_out(matrix, mean_vector, stdev, std::nullopt);
         return sample;
     }
 };
@@ -504,6 +504,10 @@ int main(int argc, const char *argv[])
             }
             else
             {
+                if (max_vector.numel() == 0)
+                {
+                    max_vector = torch::zeros({number_of_nodes}, default_tensor_options);
+                }
                 // Print the max vector on one line
                 for (int i = 0; i < max_vector.sizes()[0]; i++)
                 {
