@@ -1,4 +1,4 @@
-# Quadratic Differentiable Optimization For The Maximum Independent Set Problem
+# Differentiable Quadratic Optimization For The Maximum Independent Set Problem
 
 # pCQO-MIS v1 #
 
